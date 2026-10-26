@@ -1322,7 +1322,10 @@ const ACT={
     if(!n){toast('Bitte einen Namen eintragen.');return;}
     if(DB.players.some(p=>p.name.toLowerCase()===n.toLowerCase())){toast('„'+n+'“ gibt es schon.');return;}
     DB.players.push({id:uid('p'),name:n,jahrgang:isNaN(jg)?null:jg,geb:'',position:'',notiz:'',foto:''});changed();render();toast(n+' angelegt.');},
-  delP:a=>{const p=pById(a.dataset.v);if(p&&confirm(p.name+' und alle '+mOf(p.id).length+' Messungen löschen?')){
+  /* zweistufig: Loeschen laesst sich nicht rueckgaengig machen und wird sofort auf alle Geraete uebertragen */
+  delP:a=>{const p=pById(a.dataset.v);if(!p)return;
+    if(!confirm('Spielerin „'+p.name+'“ löschen?\n\nGelöscht werden auch alle '+mOf(p.id).length+' Messungen'+(p.code?' und ihr Zugangscode':'')+'.\n\n(Nur den Zugangscode entfernen: „Code zeigen“ → „Zugang entfernen“.)'))return;
+    if(confirm('Wirklich endgültig löschen?\n\n„'+p.name+'“ kann danach nicht wiederhergestellt werden'+(SYNC.team?' und wird auch auf allen verbundenen Geräten gelöscht':'')+'.')){
     DB.players=DB.players.filter(x=>x.id!==p.id);DB.messungen=DB.messungen.filter(m=>m.pid!==p.id);changed();render();}},
   delPhoto:a=>{pById(a.dataset.v).foto='';changed();render();},
   delLogo:a=>{DB.settings[a.dataset.v]='';changed();render();},
