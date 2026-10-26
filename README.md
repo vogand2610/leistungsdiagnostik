@@ -21,7 +21,7 @@ Leistungsdiagnostik für Handball-Mannschaften als installierbare Web-App. Läuf
 ## Supabase einrichten (einmalig)
 
 1. **Region prüfen**: Project Settings → General. Für Daten Minderjähriger möglichst eine EU-Region (z. B. Frankfurt).
-2. **Datenbank**: SQL Editor → nacheinander den Inhalt von `supabase/migrations/001_init.sql` und `002_player_updates.sql` einfügen → jeweils Run. Wer 001 schon ausgeführt hat, führt nur 002 aus.
+2. **Datenbank**: SQL Editor → nacheinander den Inhalt von `supabase/migrations/001_init.sql`, `002_player_updates.sql` und `003_rename_team.sql` einfügen → jeweils Run. Bereits ausgeführte Dateien nicht wiederholen, nur die neuen.
 3. **Anmeldung**: Authentication → Sign In / Providers
    - „Allow new users to sign up“: an (wird für die anonyme Anmeldung gebraucht)
    - „Allow anonymous sign-ins“: an

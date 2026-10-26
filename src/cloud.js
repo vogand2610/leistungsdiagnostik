@@ -27,6 +27,7 @@ export const cloud={
   async createTeam(id,name,proof){const c=await sb();const {error}=await c.rpc('create_team',{p_id:id,p_name:name,p_proof:proof});if(error)fail(error);},
   async joinTeam(name,proof){const c=await sb();const {data,error}=await c.rpc('join_team',{p_name:name,p_proof:proof});if(error)fail(error);return data;},
   async setSecret(id,proof){const c=await sb();const {error}=await c.rpc('set_team_secret',{p_team:id,p_proof:proof});if(error)fail(error);},
+  async renameTeam(id,name,proof){const c=await sb();const {error}=await c.rpc('rename_team',{p_team:id,p_name:name,p_proof:proof});if(error)fail(error);},
   async role(id){const c=await sb();const {data,error}=await c.rpc('team_role',{p_team:id});if(error)fail(error);return data;},
   async members(id){const c=await sb();const {data,error}=await c.from('team_members').select('user_id,role,joined_at').eq('team_id',id).order('joined_at');if(error)fail(error);return data;},
   async removeMember(id,uid){const c=await sb();const {error}=await c.from('team_members').delete().eq('team_id',id).eq('user_id',uid);if(error)fail(error);},

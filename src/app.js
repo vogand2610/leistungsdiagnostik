@@ -495,7 +495,8 @@ function fitList(){
   const el=$('#teamList');document.body.classList.remove('fit');
   if(!el)return;el.style.maxHeight='';
   const top=el.getBoundingClientRect().top+window.scrollY,avail=Math.floor(window.innerHeight-top-16);
-  if(avail>=260){el.style.maxHeight=avail+'px';document.body.classList.add('fit');}
+  /* auf schmalen Bildschirmen scrollt die ganze Seite, ein kleines Listenfenster waere dort zu eng */
+  if(avail>=260&&window.innerWidth>=700){el.style.maxHeight=avail+'px';document.body.classList.add('fit');}
 }
 
 /* Profil */
@@ -790,6 +791,9 @@ function renderOnline(){
     h+=`<p><span class="chip c1">verbunden</span> „${esc(SYNC.name)}“ als ${SYNC.role==='owner'?'Master':'Trainer/in'}.${SYNC.at?' Zuletzt abgeglichen um '+SYNC.at.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+'.':''}</p>
       <p class="hint">Änderungen werden automatisch mit allen verbundenen Geräten abgeglichen. Offline Erfasstes wird übertragen, sobald wieder Internet da ist.</p>
       <div class="row"><button class="btn" data-act="syncNow">Jetzt abgleichen</button><button class="btn ghost" data-act="disconnect">Verbindung trennen</button></div>`;
+    if(SYNC.role==='owner')h+=`<details style="margin-top:14px"><summary class="hint" style="cursor:pointer">Mannschaft umbenennen</summary>
+      <div class="row"><input id="renameName" value="${esc(SYNC.name)}" placeholder="Neuer Mannschaftsname" autocomplete="off" aria-label="Neuer Mannschaftsname"><button class="btn" data-act="renameTeam">Umbenennen</button></div>
+      <p class="hint">Verbundene Geräte bleiben verbunden. Neue Geräte verbinden sich danach mit dem neuen Namen und dem bisherigen Passwort.</p></details>`;
   }else{
     h+=`<p>Mit einer Mannschaft verbinden. Mannschaftsname und Passwort bekommst du vom Master.</p>
       <div class="row"><input id="joinName" placeholder="Mannschaftsname" autocomplete="off" aria-label="Mannschaftsname"><input type="password" id="joinPw" placeholder="Passwort" autocomplete="current-password" aria-label="Passwort"></div>
@@ -1350,6 +1354,13 @@ const ACT={
       changed();await persist();await syncNow();refreshLocalTeams();render();
       toast('„'+n+'“ ist online. Trainer verbinden sich mit Mannschaftsname und Passwort.');}
     catch(e){console.error(e);toast(e.code==='23505'?'Diesen Mannschaftsnamen gibt es schon.':e.code==='42501'?'Nur der Master darf Mannschaften anlegen.':cloudMsg(e));}},
+  renameTeam:async()=>{const n=$('#renameName').value.trim();
+    if(n.length<2){toast('Bitte einen Mannschaftsnamen eingeben.');return;}
+    if(n===SYNC.name)return;
+    if(!SEC.pw){toast('Bitte die App einmal sperren und mit dem Passwort neu öffnen.');return;}
+    try{await cloud.renameTeam(SYNC.team,n,await joinProof(SEC.pw,n));
+      SYNC.name=n;await saveSync();render();toast('Die Mannschaft heißt jetzt „'+n+'“.');}
+    catch(e){console.error(e);toast(e.code==='23505'?'Diesen Mannschaftsnamen gibt es schon.':e.code==='42501'?'Nur der Master darf die Mannschaft umbenennen.':cloudMsg(e));}},
   syncNow:async()=>{await syncNow();render();toast(SYNC.status==='ok'?'Abgeglichen.':'Abgleich gerade nicht möglich.');},
   disconnect:async()=>{if(!confirm('Abgleich auf diesem Gerät beenden? Die Daten bleiben hier erhalten, Änderungen werden aber nicht mehr übertragen.'))return;
     Object.assign(SYNC,{team:null,name:'',role:null,base:0,pending:false,status:''});await saveSync();updateState();render();},

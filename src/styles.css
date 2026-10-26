@@ -133,7 +133,9 @@ td.score{min-width:120px;padding:0 8px}
 .sbar i span{position:absolute;inset:0 auto 0 0;border-radius:2px}
 body.fit main{padding-bottom:16px}
 body.fit{overflow-y:hidden}
-.listbox{overflow:auto;overscroll-behavior:contain;border-radius:8px}
+/* contain nur, wenn die Liste selbst senkrecht scrollt; sonst blockiert es auf Touch-Geraeten das Scrollen der Seite */
+.listbox{overflow:auto;overscroll-behavior-x:contain;border-radius:8px}
+body.fit .listbox{overscroll-behavior:contain}
 table.hm thead th{position:sticky;top:0;z-index:2;background:var(--bg);box-shadow:0 3px 0 var(--bg)}
 table.hm tfoot td{position:sticky;bottom:0;z-index:2;height:58px;box-shadow:0 -3px 0 var(--bg),0 -6px 0 var(--ink)}
 table.hm tfoot td.name,table.hm tfoot td.score,table.hm tfoot td.flags,table.hm tfoot td.empty{background:var(--bg)}
