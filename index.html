@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="hell">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leistungsdiagnostik</title>
+<meta name="description" content="Leistungsdiagnostik für Handball-Mannschaften">
+<meta name="theme-color" content="#111418">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png">
+</head>
+<body>
+<header class="top">
+  <div class="flag" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="bar">
+    <div class="logos" id="logos"></div>
+    <div class="brand"><h1>Leistungsdiagnostik</h1><div id="subtitle"></div></div>
+    <div class="status"><span class="pill" id="state">Gespeichert</span><span class="pill" id="sync" hidden></span><button class="btn small" data-act="theme" id="themeBtn" title="Hell oder dunkel">Dunkel</button><button class="btn small" data-act="lock" id="lockBtn" hidden="">Sperren</button></div>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="Bereiche">
+    <button data-tab="team">Team</button>
+    <button data-tab="profil">Spielerin</button>
+    <button data-tab="testtag">Testtag</button>
+    <button data-tab="training">Training</button>
+    <button data-tab="kader">Kader</button>
+    <button data-tab="daten">Daten</button>
+  </nav>
+</header>
+<div id="bannerSlot"></div><div id="hintSlot"></div>
+<main><div id="printHead"></div><div id="view"></div></main>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="media" aria-label="Medien"></dialog>
+<input type="file" id="filePick" hidden="">
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
