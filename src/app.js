@@ -1482,8 +1482,10 @@ document.addEventListener('change',e=>{const el=e.target.closest('[data-chg]');i
 document.addEventListener('input',e=>{const el=e.target;if(el.dataset&&el.dataset.inp==='ttVal'){ui.tt.vals[el.dataset.k]=el.value;refreshTTFeedback();}});
 document.addEventListener('keydown',e=>{
   if(DB&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(document.activeElement)document.activeElement.blur();setTimeout(()=>persist().then(()=>toast(saveErr?'Speichern fehlgeschlagen.':'Gespeichert.')),0);return;}
-  if(e.key==='Enter'&&(e.target.id==='mEmail'||e.target.id==='mPw')){e.preventDefault();
-    if(e.target.id==='mEmail')$('#mPw').focus();else ACT.mLogin();return;}
+  /* Enter: zum naechsten Feld bzw. Formular absenden */
+  const ENTER={mEmail:'#mPw',mPw:'mLogin',joinName:'#joinPw',joinPw:'join',renameName:'renameTeam',teamName:'#tpw1',tpw1:'#tpw2',tpw2:'createTeam',pw1:'#pw2',pw2:'setPw'};
+  const nx=e.key==='Enter'&&ENTER[e.target.id];
+  if(nx){e.preventDefault();const f=nx[0]==='#'&&$(nx);if(f)f.focus();else if(nx[0]==='#')ACT.createTeam();else ACT[nx]();return;}
   if(e.key==='Enter'&&e.target.dataset&&e.target.dataset.inp==='ttVal'){e.preventDefault();
     const all=[...document.querySelectorAll('[data-inp="ttVal"]')],i=all.indexOf(e.target);if(all[i+1])all[i+1].focus();else $('[data-act="ttApply"]').focus();}
 });
