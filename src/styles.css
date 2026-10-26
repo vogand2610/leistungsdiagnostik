@@ -68,7 +68,22 @@ nav.tabs button[aria-current="true"]{color:var(--head-ink);border-bottom-color:#
 body.locked nav.tabs, body.locked .status{display:none}
 body.player nav.tabs, body.player #state, body.player #sync, body.player #lockBtn{display:none}
 .code{font:700 34px/1.2 var(--cond);letter-spacing:.08em;text-align:center;margin:8px 0 12px}
-@media (max-width:640px){#themeBtn{display:none}.brand h1{font-size:21px}}
+/* Handy: Logos + Titel in Zeile 1, Status kompakt in Zeile 2, damit nichts ueberlappt */
+@media (max-width:640px){
+  #themeBtn{display:none}
+  .bar{flex-wrap:wrap;gap:6px 10px;padding:8px 14px}
+  .logos{gap:6px}
+  .logos img{height:32px;max-width:64px;padding:2px}
+  .brand{flex:1}
+  .brand h1{font-size:20px;overflow:hidden;text-overflow:ellipsis}
+  .brand div{font-size:13px}
+  .status{order:3;width:100%;margin-left:0;gap:6px}
+  .status .pill{font-size:12px;padding:2px 8px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .status .btn.small{padding:2px 10px;font-size:13px;flex:none;margin-left:auto}
+  body.player .status{display:none}
+  nav.tabs{padding:0 6px}
+  nav.tabs button{font-size:17px;padding:6px 9px 9px}
+}
 main{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
 #printHead{display:none}
 
