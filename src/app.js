@@ -704,11 +704,35 @@ function meBlocks(){
   const o=ui.me,D=o.dauer,warm=D<=15?3:D<=30?5:D<=45?7:8,cool=D<=15?2:D<=30?3:5;
   const pools=ME.pools||{},f=o.fokus!=='auto'&&pools[o.fokus]?(o.fokus===RUMPF?[]:[o.fokus]):(ME.fokus||[]).filter(Boolean);
   const pat=f.length>1?[f[0],RUMPF,f[1],f[0],f[1],RUMPF]:f.length?[f[0],RUMPF,f[0]]:[RUMPF];
-  const q={};Object.keys(pools).forEach(b=>{q[b]=shuffled(pools[b].map(exByNr).filter(e=>e&&(o.ort==='alle'||e.ort===o.ort)),ME.player.id+'|'+o.variante+'|'+b);});
+  const fehlt=meFehlt();
+  const q={};Object.keys(pools).forEach(b=>{q[b]=shuffled(pools[b].map(exByNr).filter(e=>e&&(o.ort==='alle'||e.ort===o.ort)&&matOk(e,fehlt)),ME.player.id+'|'+o.variante+'|'+b);});
   let left=D-warm-cool,more=true;const blocks=[];
   while(more){more=false;
     for(const b of pat){const l=q[b],m=exMin(b);if(l&&l.length&&m<=left){blocks.push({b,e:l.shift(),min:m});left-=m;more=true;}}}
   return {warm,cool,blocks,sum:D-left};
+}
+/* Material der Spielerin: gespeichert wird, was FEHLT (wie bei den Materialprofilen), damit neue Materialien standardmaessig als vorhanden gelten */
+function meFehlt(){
+  if(!ui.me.fehlt){let a=[];try{a=JSON.parse(localStorage.getItem('ld-me-mat')||'[]');}catch(e){}ui.me.fehlt=new Set(Array.isArray(a)?a:[]);}
+  return ui.me.fehlt;
+}
+function meSaveFehlt(){try{localStorage.setItem('ld-me-mat',JSON.stringify([...meFehlt()]));}catch(e){}}
+function meMats(){
+  const c={};Object.values(ME.pools||{}).flat().map(exByNr).filter(Boolean).forEach(e=>new Set(matGroups(e.material).flat()).forEach(m=>c[m]=(c[m]||0)+1));
+  return Object.keys(c).sort((a,b)=>c[b]-c[a]||a.localeCompare(b,'de')).map(m=>({m,n:c[m]}));
+}
+function meMatField(){
+  const ms=meMats();if(!ms.length)return '';
+  const f=meFehlt(),has=ms.filter(x=>!f.has(x.m)).length;
+  const lbl=has===ms.length?'alles vorhanden':has?has+' von '+ms.length+' vorhanden':'nur ohne Material';
+  return `<div class="field">Material<div class="dd">
+    <button class="btn dd-btn" data-act="meMatOpen" aria-expanded="${!!ui.me.matOpen}">${lbl}<span aria-hidden="true">▾</span></button>
+    ${ui.me.matOpen?`<div class="dd-panel" role="group" aria-label="Vorhandenes Material">
+      <p class="hint" style="margin:0 0 8px">Hake an, was du hast. Übungen mit fehlendem Material werden nicht vorgeschlagen. Übungen ohne Material gehen immer.</p>
+      <div class="row" style="margin-bottom:6px"><button class="btn small" data-act="meMatAll" data-v="1">Alles</button><button class="btn small" data-act="meMatAll" data-v="0">Nichts</button></div>
+      ${ms.map(x=>`<label class="dd-item"><input type="checkbox" data-chg="meMat" value="${esc(x.m)}"${f.has(x.m)?'':' checked'}><span>${esc(x.m)}</span><small>${x.n} Übung${x.n>1?'en':''}</small></label>`).join('')}
+      <div class="row" style="margin-top:8px;justify-content:flex-end"><button class="btn small primary" data-act="meMatOpen">Fertig</button></div>
+    </div>`:''}</div></div>`;
 }
 function mePlan(){
   const o=ui.me,r=meBlocks();
@@ -717,13 +741,14 @@ function mePlan(){
     <div class="field">Dauer<div class="toggle" role="group" aria-label="Dauer">${DAUERN.map(d=>`<button data-act="meDauer" data-v="${d}" aria-pressed="${o.dauer===d}">${d} min</button>`).join('')}</div></div>
     <label class="field">Schwerpunkt<select data-chg="meFokus">${opt('auto','meine Förderschwerpunkte'+((ME.fokus||[]).length?' ('+ME.fokus.join(', ')+')':''),o.fokus)}${Object.keys(ME.pools||{}).filter(b=>ME.pools[b].length).map(b=>opt(b,b,o.fokus)).join('')}</select></label>
     <label class="field">Ort<select data-chg="meOrt">${opt('alle','alle',o.ort)}${ORTE.map(n=>opt(n,'nur '+n,o.ort)).join('')}</select></label>
+    ${meMatField()}
     <div class="field">Übungen<button class="btn" data-act="meReroll">Andere Übungen</button></div>
   </div>
   ${r.blocks.length?`
   <div class="panel" style="margin-bottom:14px"><b>Aufwärmen, ${r.warm} min:</b> lockeres Einlaufen oder Hampelmänner, Armkreisen, Ausfallschritte, Skippings, ein paar kurze Antritte.</div>
   <div class="exlist">${r.blocks.map((x,i)=>exCard(x.e,`<span>Zeit <b>≈ ${x.min} min</b></span><span>Bereich <b>${esc(x.b)}</b></span>`)).join('')}</div>
   <div class="panel" style="margin-top:14px"><b>Cool-down, ${r.cool} min:</b> locker auslaufen oder gehen, dann die beanspruchten Muskeln ruhig dehnen.</div>`
-  :'<div class="panel empty">Für diese Auswahl gibt es keine passenden Übungen. Anderen Ort wählen.</div>'}
+  :'<div class="panel empty">Für diese Auswahl gibt es keine passenden Übungen. Anderen Ort wählen oder mehr Material anhaken.</div>'}
   ${PLAN_HINTS}`;
 }
 async function meSubmit(){
@@ -1450,6 +1475,8 @@ const ACT={
   meStart:()=>showCodeForm(),
   meDauer:a=>{ui.me.dauer=+a.dataset.v;render();},
   meReroll:()=>{ui.me.variante=ui.me.variante%9+1;render();},
+  meMatOpen:()=>{ui.me.matOpen=!ui.me.matOpen;render();},
+  meMatAll:a=>{const f=meFehlt();f.clear();if(a.dataset.v==='0')meMats().forEach(x=>f.add(x.m));meSaveFehlt();render();},
   meDelPhoto:()=>{if(!ME||!confirm('Foto entfernen?'))return;DB.players[0].foto='';meSubmit();},
   scoreInfo:(a,e)=>{e.preventDefault();const el=$('#scoreInfo');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},
   meNoInstall:()=>{try{localStorage.setItem('ld-me-noinstall','1');}catch(e){}const el=$('#meInstall');if(el)el.remove();},
@@ -1493,6 +1520,7 @@ const CHG={
   tp:el=>{if(el.dataset.k==='halle'&&el.value==='__neu'){newHalle('tp');return;}ui.tp[el.dataset.k]=el.value;if(el.dataset.k==='halle')ui.matEdit=null;render();},
   cmp:el=>{ui.cmp=el.value;render();},
   meOrt:el=>{ui.me.ort=el.value;render();},
+  meMat:el=>{const f=meFehlt();if(el.checked)f.delete(el.value);else f.add(el.value);meSaveFehlt();render();},
   meFokus:el=>{ui.me.fokus=el.value;render();},
   meGeb:el=>{if(!ME)return;const g=el.value;if(!validGeb(g)){toast('Bitte ein gültiges Datum eingeben.');el.value=DB.players[0].geb||'';return;}
     DB.players[0].geb=g;meSubmit();},

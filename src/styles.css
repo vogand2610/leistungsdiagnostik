@@ -346,3 +346,12 @@ input.c1{background:var(--c1);color:var(--c1t)}input.c2{background:var(--c2);col
   .sx-row>.sx-w{grid-column:2;grid-row:1}
   .sx-sum>span:nth-child(2){grid-column:1/-1;grid-row:2}
 }
+/* Auswahlliste mit Haekchen (Material der Spielerin) */
+.dd{position:relative}
+.dd-btn{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dd-panel{position:absolute;z-index:30;top:calc(100% + 4px);left:0;width:min(320px,calc(100vw - 32px));max-height:min(60vh,460px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:12px}
+.dd-item{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--line);cursor:pointer;font-size:15px}
+.dd-item:last-of-type{border-bottom:0}
+.dd-item input{width:18px;height:18px;flex:none;accent-color:var(--ink)}
+.dd-item span{flex:1}
+.dd-item small{color:var(--muted);font-size:12px;white-space:nowrap}
