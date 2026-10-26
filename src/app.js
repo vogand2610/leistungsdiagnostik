@@ -591,7 +591,7 @@ function renderProfil(){
   if(ui.cmp==='p:'+p.id)ui.cmp='';
   const ro=!!ME,cmp=ro?null:cmpData(p);
   return `
-  ${ro?`<div class="pick"><span style="flex:1"></span><button class="btn ghost no-print" data-act="print">Drucken</button><button class="btn ghost no-print" data-act="meLogout">Abmelden</button></div>`:`<div class="pick">${playerPicker(list,p)}
+  ${ro?`<div class="pick"><span style="flex:1"></span><button class="btn ghost no-print" data-act="print">Drucken</button><button class="btn ghost no-print" data-act="meLogout">Abmelden</button></div>${meInstall()}`:`<div class="pick">${playerPicker(list,p)}
     <label class="field no-print" style="flex-direction:row;align-items:center;gap:8px;margin-left:8px">Vergleichen mit
       <select data-chg="cmp" style="font-size:16px;font-family:var(--body);font-weight:500">${opt('','–',ui.cmp)}${p.jahrgang?opt('jg','Ø Jahrgang '+p.jahrgang,ui.cmp):''}${opt('team','Ø Team (alle)',ui.cmp)}
         <optgroup label="Spielerin">${list.filter(x=>x.id!==p.id).map(x=>opt('p:'+x.id,x.name,ui.cmp)).join('')}</optgroup></select></label>
@@ -640,6 +640,26 @@ function msReadonly(p,ms){
     ${ms.map(m=>`<tr><td>${monthLabel(m.monat)}</td><td>${esc(m.name)}</td>${TESTS.map(t=>{const v=m.w[t.key],c=v==null?null:cat(t,v,p);
       return `<td class="v num">${v==null?'–':`<span class="chip${c?' c'+c:' plain'}">${fmt(t,v)}</span>`}</td>`;}).join('')}</tr>`).join('')}
   </tbody></table>`;
+}
+/* Installationshinweis fuer Spielerinnen, die ihren Link im Browser geoeffnet haben.
+   iOS: die installierte App hat einen eigenen Speicher, daher den Code zum Einfuegen anbieten. */
+const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function meInstall(){
+  if(matchMedia('(display-mode: standalone)').matches||navigator.standalone)return '';
+  try{if(localStorage.getItem('ld-me-noinstall'))return '';}catch(e){}
+  const code=ME.code.slice(0,5)+'-'+ME.code.slice(5);
+  const codeBox=`<p style="margin-bottom:4px">Danach in der App auf <b>„Ich bin Spielerin“</b> tippen und diesen Code einfügen:</p>
+    <div class="codebox"><code id="meCodeTxt">${esc(code)}</code><button class="btn small" data-act="copyTxt" data-v="meCodeTxt">Code kopieren</button></div>`;
+  let body;
+  if(installPrompt)body=`<p>Mit einem Tipp hast du deine Werte und Trainingspläne als App auf dem Startbildschirm, auch ohne Internet.</p>
+    <div class="row"><button class="btn primary" data-act="install">App installieren</button></div>`;
+  else if(IS_IOS)body=`<p>So hast du deine Werte und Trainingspläne als App auf dem Startbildschirm, auch ohne Internet:</p>
+    <ol class="steps"><li>Diese Seite in <b>Safari</b> öffnen.</li><li>Unten bzw. oben auf das <b>Teilen-Symbol</b> tippen (Quadrat mit Pfeil nach oben).</li><li><b>„Zum Home-Bildschirm“</b> wählen, dann „Hinzufügen“.</li></ol>${codeBox}`;
+  else body=`<p>So hast du deine Werte und Trainingspläne als App auf dem Startbildschirm, auch ohne Internet:</p>
+    <ol class="steps"><li>Diese Seite in <b>Chrome</b> öffnen.</li><li>Menü <b>⋮</b> oben rechts, dann <b>„App installieren“</b> bzw. „Zum Startbildschirm hinzufügen“.</li></ol>
+    <p class="hint">Falls die App danach nach einem Code fragt: <b>${esc(code)}</b></p>`;
+  return `<div class="panel no-print" id="meInstall" style="margin-bottom:18px"><h3>Als App installieren</h3>${body}
+    <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="meNoInstall">Später</button></div></div>`;
 }
 function meData(p){
   let pend=false;try{const x=JSON.parse(localStorage.getItem('ld-me-pending')||'null');pend=!!(x&&x.code===ME.code&&!x.sent);}catch(e){}
@@ -1393,6 +1413,7 @@ const ACT={
   meDauer:a=>{ui.me.dauer=+a.dataset.v;render();},
   meReroll:()=>{ui.me.variante=ui.me.variante%9+1;render();},
   meDelPhoto:()=>{if(!ME||!confirm('Foto entfernen?'))return;DB.players[0].foto='';meSubmit();},
+  meNoInstall:()=>{try{localStorage.setItem('ld-me-noinstall','1');}catch(e){}const el=$('#meInstall');if(el)el.remove();},
   meLogout:()=>{try{localStorage.removeItem('ld-me');localStorage.removeItem('ld-me-pending');}catch(e){}location.hash='';location.reload();},
   connectHow:()=>{$('#bannerSlot').innerHTML='';go('daten');},
   welcomeOff:()=>{$('#bannerSlot').innerHTML='';try{localStorage.setItem('ld-welcome-off','1');}catch(e){}}
@@ -1463,8 +1484,8 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('online',()=>syncNow());
 window.addEventListener('offline',()=>{if(SYNC.team)setSync('offline');});
 setInterval(()=>{if(document.visibilityState==='visible')syncNow();},60000);
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;if(DB&&ui.tab==='daten')render();});
-window.addEventListener('appinstalled',()=>{installPrompt=null;});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;if(DB&&(ui.tab==='daten'||ui.tab==='me'))render();});
+window.addEventListener('appinstalled',()=>{installPrompt=null;if(DB&&ui.tab==='me')render();});
 
 /* ---------- Start ---------- */
 function normalize(d){
