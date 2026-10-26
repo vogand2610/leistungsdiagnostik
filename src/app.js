@@ -533,6 +533,33 @@ function bandBar(t,p,cv){
     <div class="ticks">${[d,c,bb,a].map(u=>`<span style="left:${X(u)}%">${fmt(t,t.dir*u)}</span>`).join('')}</div>
   </div>`;
 }
+/* Rechenweg des Athletik-Scores: Punkte je Test (0-100 aus den DHB-Werten), Gewicht, Beitrag zur Summe */
+const dez=(v,n)=>v.toFixed(n==null?1:n).replace('.',',');
+function scoreInfo(p){
+  const rows=TESTS.map(t=>{const l=lastOf(p.id,t.key);return {t,l,s:l?score(t,l.v,p):null};});
+  const sw=rows.reduce((a,r)=>a+(r.s!=null?r.t.w:0),0),tot=total(p),missing=rows.some(r=>r.s==null);
+  const unit=t=>t.time?'min':t.key==='liege'?'Wdh.':t.unit;
+  const avgRange=t=>{const b=th(t,p),lo=Math.min(b[1],b[2]),hi=Math.max(b[1],b[2]);return fmt(t,lo)+'–'+fmt(t,hi)+' '+unit(t);};
+  const scale=[5,4,3,2,1].map((c,i)=>`<div><span class="c${c}"></span><small>${i*20}–${i*20+19+(i===4?1:0)}</small><small>${CATS_SHORT[c-1]}</small></div>`).join('');
+  return `<div class="section-h" id="scoreInfo"><h2>So entsteht der Athletik-Score</h2></div>
+  <div class="panel sx">
+    <p style="margin-top:0"><b>1. Jeder Test wird in Punkte umgerechnet.</b> Der Wert wird mit den DHB-Orientierungswerten verglichen (${normKey(p)==='15'?'Mädchen 15 Jahre':'Mädchen 13–15 Jahre'}). Je besser im Vergleich, desto mehr Punkte, von 0 bis 100. Wer genau im DHB-Durchschnitt liegt, bekommt etwa 50 Punkte.</p>
+    <div class="sx-scale" aria-hidden="true">${scale}</div>
+    <p><b>2. Die Punkte werden gewichtet zusammengezählt.</b> Kraft und Schnelligkeit zählen am meisten, weil sie im Handball besonders wichtig sind.${missing&&tot?' Nicht getestete Bereiche zählen nicht mit; ihr Anteil wird auf die getesteten verteilt.':''}</p>
+    <div class="sx-rows">
+      <div class="sx-row sx-head"><span>Test und Wert</span><span>Punkte (0–100)</span><span>Anteil → Beitrag</span></div>
+      ${rows.map(r=>{const t=r.t,ew=r.s!=null?t.w/sw:0;return `<div class="sx-row${r.s==null?' off':''}">
+        <div><b>${t.name}</b> <span class="hint">(${t.area})</span>
+          <div>${r.l?`<span class="sx-val">${fmt(t,r.l.v)} ${unit(t)}</span> ${chip(cat(t,r.l.v,p),true)}`:'<span class="muted">nicht getestet</span>'}</div>
+          <div class="hint">DHB-Durchschnitt: ${avgRange(t)}</div></div>
+        <div>${r.s!=null?scoreBar(r.s):'<span class="muted">zählt nicht mit</span>'}</div>
+        <div class="sx-w">${r.s!=null?`${dez(ew*100,0)} %${Math.abs(ew-t.w)>1e-6?` <small class="muted">(sonst ${dez(t.w*100,0)} %)</small>`:''}<br><b>+ ${dez(r.s*ew)}</b> Pkt.`:`<span class="muted">${dez(t.w*100,0)} %</span>`}</div>
+      </div>`;}).join('')}
+      <div class="sx-row sx-sum"><span><b>Athletik-Score</b></span><span class="hint">Summe der Beiträge${tot?' = '+dez(tot.score)+', gerundet':''}</span><span class="sx-w"><b class="sx-total">${tot?Math.round(tot.score):'–'}</b></span></div>
+    </div>
+    <p class="hint" style="margin-bottom:0">Gezählt wird jeweils die letzte Messung. 0–19 Punkte = weit unter, 20–39 = unter, 40–59 = Durchschnitt, 60–79 = über, 80–100 = weit über dem DHB-Durchschnitt.</p>
+  </div>`;
+}
 function goalText(t,p){
   const l=lastOf(p.id,t.key);if(!l)return 'Noch nicht getestet.';
   const c=cat(t,l.v,p);if(c===1)return '<b>Spitzenbereich</b> der DHB-Werte erreicht.';
@@ -604,7 +631,7 @@ function renderProfil(){
       ${COURT_SVG}
       <div class="who"><label class="avatar-up${p.foto?'':' none'}" title="Foto ${p.foto?'ändern':'hinzufügen'}">${avatar(p,'avatar')}<span>${p.foto?'Ändern':'+ Foto'}</span><input type="file" accept="image/*" hidden data-chg="${ro?'mePhoto':'photo'}" data-id="${p.id}"></label><div><h2>${esc(p.name)}</h2>
         <div class="meta">${[p.jahrgang?'Jahrgang '+p.jahrgang:'',ageClass(p.jahrgang),ag!=null?ag+' Jahre':'',p.position].filter(Boolean).map(esc).join(', ')}</div></div></div>
-      <div class="big"><b>${tot?Math.round(tot.score):'–'}</b><span>Athletik-Score<br>${tot?tot.n+' von 5 Tests':'noch keine Werte'}${cmp?`<br><span style="color:#8FB4FF">${esc(cmp.label)}: ${cmp.total!=null?Math.round(cmp.total):'–'}</span>`:''}</span>${logo?`<img class="clublogo" src="${esc(logo)}" alt="">`:''}</div>
+      <div class="big"><b>${tot?Math.round(tot.score):'–'}</b><span>Athletik-Score<br>${tot?tot.n+' von 5 Tests':'noch keine Werte'}<br><a href="#scoreInfo" class="no-print" data-act="scoreInfo" style="color:#8FB4FF">Wie berechnet?</a>${cmp?`<br><span style="color:#8FB4FF">${esc(cmp.label)}: ${cmp.total!=null?Math.round(cmp.total):'–'}</span>`:''}</span>${logo?`<img class="clublogo" src="${esc(logo)}" alt="">`:''}</div>
       ${radar(p,cmp)}
       ${cmp?`<div class="rleg"><span><i></i>${esc(p.name.split(',').map(s=>s.trim())[1]||p.name)}</span><span><i class="c"></i>${esc(cmp.label)}</span></div>`:'<div class="rleg" style="visibility:hidden" aria-hidden="true"><span><i></i>&nbsp;</span></div>'}
       <div class="tags">${strong.map(x=>`<span class="chip c${scoreCat(x.s)}">Stärke: ${x.t.area}</span>`).join('')}${weak.map(x=>`<span class="chip c${scoreCat(x.s)}">Fördern: ${x.t.area}</span>`).join('')}</div>
@@ -621,6 +648,7 @@ function renderProfil(){
       <p class="hint" style="margin-bottom:0">Vergleichswerte: DHB-Orientierungswerte Mädchen ${normKey(p)==='15'?'15 Jahre':'13–15 Jahre'}. Für jüngere Jahrgänge ist der Vergleich entsprechend streng.</p>
     </div>
   </div>
+  ${scoreInfo(p)}
   ${ro?meData(p):''}
   <div class="section-h"><h2>Messungen</h2>${ro?'':'<button class="btn no-print" data-act="addM">Messung hinzufügen</button>'}</div>
   <div class="panel scroll" style="padding:8px 12px">
@@ -1423,6 +1451,7 @@ const ACT={
   meDauer:a=>{ui.me.dauer=+a.dataset.v;render();},
   meReroll:()=>{ui.me.variante=ui.me.variante%9+1;render();},
   meDelPhoto:()=>{if(!ME||!confirm('Foto entfernen?'))return;DB.players[0].foto='';meSubmit();},
+  scoreInfo:(a,e)=>{e.preventDefault();const el=$('#scoreInfo');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},
   meNoInstall:()=>{try{localStorage.setItem('ld-me-noinstall','1');}catch(e){}const el=$('#meInstall');if(el)el.remove();},
   meLogout:()=>{try{localStorage.removeItem('ld-me');localStorage.removeItem('ld-me-pending');}catch(e){}location.hash='';location.reload();},
   connectHow:()=>{$('#bannerSlot').innerHTML='';go('daten');},
