@@ -1356,10 +1356,16 @@ const ACT={
       const pw=prompt('Die Datei ist mit einem Passwort geschützt. Passwort:');if(!pw)return;
       try{r=await decryptWrap(d,pw);r.pw=pw;d=r.db;}catch(e){toast('Passwort falsch.');return;}}
     if(!Array.isArray(d.players)){toast('In dieser Datei wurden keine Leistungsdiagnostik-Daten gefunden.');return;}
-    if(!confirm(`${d.players.length} Spielerinnen und ${(d.messungen||[]).length} Messungen übernehmen? Die aktuellen Daten werden ersetzt.`))return;
-    if(r){SEC.key=r.key;SEC.salt=r.salt;SEC.pw=r.pw;}
-    DB=normalize(d);ui.pid=null;$('#bannerSlot').innerHTML='';changed();applyTheme();go('team');
-    toast(r?'Datei übernommen. Das Passwort der Datei schützt jetzt auch die Daten in der App.':'Datei übernommen.');},
+    if(!confirm(`${d.players.length} Spielerinnen und ${(d.messungen||[]).length} Messungen übernehmen? Die aktuellen Daten werden ersetzt`+(SYNC.team?', auch auf allen verbundenen Geräten.':'.')))return;
+    /* Online-Mannschaft: Mannschaftspasswort und Id bleiben, sonst koennen die anderen Geraete nicht mehr entschluesseln */
+    const online=!!SYNC.team,keep=DB.meta.fileId,lib=DB.uebungen;
+    /* Zugangscodes der Spielerinnen gab es in der alten Datei noch nicht: vorhandene uebernehmen */
+    const codes=new Map();DB.players.forEach(p=>{if(p.code){codes.set('id:'+p.id,p.code);codes.set('n:'+p.name,p.code);}});
+    if(r&&!online){SEC.key=r.key;SEC.salt=r.salt;SEC.pw=r.pw;}
+    DB=normalize(d);if(keep)DB.meta.fileId=keep;if(!d.uebungen||!d.uebungen.length)DB.uebungen=lib;
+    DB.players.forEach(p=>{if(!p.code)p.code=codes.get('id:'+p.id)||codes.get('n:'+p.name)||'';if(!p.code)delete p.code;});
+    ui.pid=null;$('#bannerSlot').innerHTML='';changed();applyTheme();go('team');
+    toast(r&&!online?'Datei übernommen. Das Passwort der Datei schützt jetzt auch die Daten in der App.':'Datei übernommen.');},
   join:async()=>{const n=$('#joinName').value.trim(),pw=$('#joinPw').value;
     if(!n||!pw){toast('Bitte Mannschaftsname und Passwort eingeben.');return;}
     await connectTeam(n,pw);},
