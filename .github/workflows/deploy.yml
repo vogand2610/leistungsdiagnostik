@@ -24,10 +24,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # GitHub Pages liegt unter /<repository>/
+      # Eigene Domain leistungsdiagnostik.handball-trainer.info: App liegt im Hauptpfad
       - run: npm run build
         env:
-          BASE: /${{ github.event.repository.name }}/
+          BASE: /
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
