@@ -58,6 +58,8 @@ Supabase-Zugang in `.env` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY` = Publishabl
 
 ## Veröffentlichen
 
+**Aktuell:** https://leistungsdiagnostik.handball-trainer.info (GitHub Pages, Repository `vogand2610/leistungsdiagnostik`, eigene Domain über einen CNAME-Eintrag bei Strato auf `vogand2610.github.io`). Jeder Push auf `main` baut und veröffentlicht automatisch. Weil die App im Hauptpfad der Domain liegt, baut der Workflow mit `BASE: /`. Ohne eigene Domain dort wieder `BASE: /<repository>/` setzen.
+
 Die App muss unter einer **HTTPS-Adresse** erreichbar sein. Über `http://` (z. B. `http://192.168.…` im Heimnetz) sperren die Browser die Verschlüsselung und den Offline-Betrieb; Anmelden, Verbinden und Spielerinnen-Codes funktionieren dann nicht. `dist/` ist eine rein statische Seite, jeder statische Hoster mit HTTPS reicht.
 
 ### Variante A: GitHub Pages (automatisch bei jeder Änderung)
