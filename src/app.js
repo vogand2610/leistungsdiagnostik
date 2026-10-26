@@ -1265,7 +1265,8 @@ const exByNr=nr=>DB.uebungen.find(e=>e.nr===+nr);
 const ACT={
   tab:a=>go(a.dataset.v),
   lock:async()=>{await persist();location.reload();},
-  install:async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;render();},
+  install:async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;render();if(!ME)installHint();},
+  installOff:()=>{try{localStorage.setItem('ld-install-off','1');}catch(e){}$('#hintSlot').innerHTML='';},
   open:(a,e)=>{e.preventDefault();go('profil',a.dataset.v);},
   toPlan:()=>{ui.tr.sub='plan';go('training');},
   pstep:a=>{ui.pid=a.dataset.v;render();},
@@ -1484,8 +1485,8 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('online',()=>syncNow());
 window.addEventListener('offline',()=>{if(SYNC.team)setSync('offline');});
 setInterval(()=>{if(document.visibilityState==='visible')syncNow();},60000);
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;if(DB&&(ui.tab==='daten'||ui.tab==='me'))render();});
-window.addEventListener('appinstalled',()=>{installPrompt=null;if(DB&&ui.tab==='me')render();});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;if(DB&&(ui.tab==='daten'||ui.tab==='me'))render();if(DB&&!ME)installHint();});
+window.addEventListener('appinstalled',()=>{installPrompt=null;if(DB&&ui.tab==='me')render();if(!ME)$('#hintSlot').innerHTML='';});
 
 /* ---------- Start ---------- */
 function normalize(d){
@@ -1508,6 +1509,7 @@ function start(){
     $('#bannerSlot').innerHTML='<div class="banner" style="background:var(--sunk);border:1px solid var(--line)"><span>Willkommen!</span>'
       +(cloudConfigured?'<button class="btn small primary" data-act="connectHow">Mit Mannschaft verbinden</button><button class="btn small" data-act="meStart">Ich bin Spielerin</button>':'')
       +'<button class="btn small" data-act="htmlIn">Bisherige HTML-Datei übernehmen</button><button class="btn small" data-act="xlsxIn">Aus Excel</button><button class="btn small ghost" data-act="welcomeOff">Leer starten</button></div>';
+  installHint();
   localStore.persist().then(ok=>{persisted=ok;});
   refreshLocalTeams();
   refreshAccount().then(()=>{if(ui.tab==='daten')render();});
@@ -1515,6 +1517,16 @@ function start(){
   let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(fitList,120);});
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitList);
   const md=$('#media');md.addEventListener('click',ev=>{if(ev.target===md)ACT.closeMedia();});md.addEventListener('close',()=>{md.innerHTML='';});
+}
+/* Installationshinweis fuer Trainerteam und Master, solange die App im Browser laeuft.
+   iOS: erst installieren, dann verbinden, weil die installierte App einen eigenen Speicher hat. */
+function installHint(){
+  const slot=$('#hintSlot');let off=false;try{off=!!localStorage.getItem('ld-install-off');}catch(e){}
+  if(ME||off||matchMedia('(display-mode: standalone)').matches||navigator.standalone||!(installPrompt||IS_IOS)){slot.innerHTML='';return;}
+  slot.innerHTML='<div class="banner no-print" style="background:var(--sunk);border:1px solid var(--line)">'
+    +(installPrompt?'<span style="flex:1;min-width:200px"><b>Als App installieren:</b> startet ohne Adressleiste und funktioniert auch offline in der Halle.</span><button class="btn small primary" data-act="install">Installieren</button>'
+      :'<span style="flex:1;min-width:200px"><b>Tipp:</b> Erst als App installieren (Teilen-Symbol → „Zum Home-Bildschirm“), dann <b>in der App</b> mit der Mannschaft verbinden. Die installierte App hat auf iPad und iPhone einen eigenen Speicher.</span>')
+    +'<button class="btn small ghost" data-act="installOff">Später</button></div>';
 }
 function showLock(w){
   document.body.classList.add('locked');document.documentElement.dataset.theme=w.theme||'hell';
@@ -1556,12 +1568,12 @@ async function openShare(code){
   DB=normalize({meta:{},settings:Object.assign({},ME.settings),players:[ME.player],messungen:ME.messungen,uebungen:ME.uebungen||[]});
   ui.tab='me';ui.pid=ME.player.id;
   document.body.classList.remove('locked');document.body.classList.add('player');
-  $('#bannerSlot').innerHTML='';render();
+  $('#bannerSlot').innerHTML='';$('#hintSlot').innerHTML='';render();
   if(pend&&!pend.sent&&navigator.onLine)meSubmit();
   return true;
 }
 function showCodeForm(msg){
-  document.body.classList.add('locked','player');$('#bannerSlot').innerHTML='';
+  document.body.classList.add('locked','player');$('#bannerSlot').innerHTML='';$('#hintSlot').innerHTML='';
   $('#view').innerHTML=`<form class="lockbox panel" id="codeForm">
     <h2>Meine Werte</h2><p class="muted">Gib den Zugangscode ein, den du von deinem Trainerteam bekommen hast.</p>
     <input id="meCode" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX" aria-label="Zugangscode">
