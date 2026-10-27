@@ -21,7 +21,7 @@ Leistungsdiagnostik für Handball-Mannschaften als installierbare Web-App. Läuf
 ## Supabase einrichten (einmalig)
 
 1. **Region prüfen**: Project Settings → General. Für Daten Minderjähriger möglichst eine EU-Region (z. B. Frankfurt).
-2. **Datenbank**: SQL Editor → nacheinander den Inhalt von `supabase/migrations/001_init.sql`, `002_player_updates.sql` und `003_rename_team.sql` einfügen → jeweils Run. Bereits ausgeführte Dateien nicht wiederholen, nur die neuen.
+2. **Datenbank**: SQL Editor → nacheinander den Inhalt von `supabase/migrations/001_init.sql`, `002_player_updates.sql`, `003_rename_team.sql` und `004_std_library.sql` einfügen → jeweils Run. Bereits ausgeführte Dateien nicht wiederholen, nur die neuen.
 3. **Anmeldung**: Authentication → Sign In / Providers
    - „Allow new users to sign up“: an (wird für die anonyme Anmeldung gebraucht)
    - „Allow anonymous sign-ins“: an
@@ -35,6 +35,13 @@ Leistungsdiagnostik für Handball-Mannschaften als installierbare Web-App. Läuf
 6. **Später beim Hosting**: Authentication → URL Configuration → „Site URL“ auf die Adresse der App setzen.
 
 Empfehlung: Unter Authentication → Attack Protection eine CAPTCHA-Prüfung für anonyme Anmeldungen aktivieren, sobald die App öffentlich erreichbar ist.
+
+## Übungsbibliothek
+
+- **Standardübungen** gelten für alle Mannschaften. Sie liegen einmal zentral in Supabase (`std_library`, unverschlüsselt, nur Übungen, keine Spielerdaten) und offline auf jedem Gerät. Ändern, anlegen und löschen kann sie nur der Master; Änderungen gelten sofort für alle.
+- **Eigene Übungen** einer Mannschaft liegen verschlüsselt im Mannschaftsdokument (Nummern ab 100001).
+- Trainer können Standardübungen für ihre Mannschaft **deaktivieren**. Deaktivierte Übungen erscheinen weder im Trainingsplan noch bei den Spielerinnen dieser Mannschaft. „Als eigene Übung kopieren“ legt eine eigene Fassung an und deaktiviert die Standardfassung.
+- **Einrichten:** Als Master unter Training → Übungsbibliothek „Als Standard veröffentlichen“. Bestehende Mannschaften stellen sich danach automatisch um: Übungen wie im Standard entfallen aus der Mannschaft, selbst geänderte bleiben als eigene Übung erhalten.
 
 ## Ablauf
 

@@ -255,7 +255,7 @@ table.pr td.pnum{font-family:var(--cond);font-size:22px;font-weight:800;width:60
 .blk p{margin:2px 0;font-size:15px}
 @media (max-width:620px){.blk{grid-template-columns:1fr 50px}.blk .bl{grid-column:1/-1}}
 .libitem{border-bottom:1px solid var(--line)}
-.libitem>button{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;width:100%;border:0;background:none;padding:10px 4px;text-align:left;cursor:pointer}
+.libitem>button{display:grid;grid-template-columns:44px 1fr auto auto;gap:12px;align-items:center;width:100%;border:0;background:none;padding:10px 4px;text-align:left;cursor:pointer}
 .libitem>button:hover{background:var(--sunk)}
 .libitem .nr{font-family:var(--cond);font-weight:700;color:var(--muted);text-align:right}
 .libitem .nm b{font-weight:600}
@@ -370,3 +370,12 @@ input.c1{background:var(--c1);color:var(--c1t)}input.c2{background:var(--c2);col
 .dd-item input{width:18px;height:18px;flex:none;accent-color:var(--ink)}
 .dd-item span{flex:1}
 .dd-item small{color:var(--muted);font-size:12px;white-space:nowrap}
+/* Standardbibliothek: fuer die Mannschaft deaktivierte Uebungen */
+.libitem.off>button{opacity:.6}
+.libedit [disabled]{opacity:1;background:var(--sunk);color:var(--ink);cursor:default}
+@media (max-width:620px){
+  .libitem>button{display:flex;flex-wrap:wrap;gap:4px 10px}
+  .libitem>button .nr{width:34px;flex:none}
+  .libitem>button .nm{flex:1 1 calc(100% - 50px);min-width:0}
+  .libitem>button .nm+.chip,.libitem>button .nm+.chip+.chip:first-of-type{margin-left:44px}
+}

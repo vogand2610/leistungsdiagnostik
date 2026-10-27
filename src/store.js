@@ -24,6 +24,9 @@ export const localStore={
   /* Abgleich-Status je Mannschaft: {team,name,role,base,pending} */
   async syncState(id){return (await get('sync:'+id,idb))||null;},
   async setSyncState(id,s){if(s)await set('sync:'+id,s,idb);else await del('sync:'+id,idb);},
+  /* Offline-Kopie der Standard-Uebungsbibliothek: {rev,payload} */
+  async std(){return (await get('std',idb))||null;},
+  async setStd(s){await set('std',s,idb);},
   /* bittet den Browser, die Daten nicht bei Speicherknappheit zu loeschen */
   async persist(){
     try{

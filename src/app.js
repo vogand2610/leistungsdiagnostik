@@ -22,12 +22,16 @@ function matGroups(s){
   s=String(s||'').replace(/Kurz-\s*oder\s*Langhantel/i,'Kurzhantel / Langhantel');
   return s.split(/[,;+]|\s+und\s+/i).map(g=>g.split(/\s*\/\s*|\s+oder\s+/i).map(canonMat).filter(Boolean)).filter(g=>g.length);
 }
-function allMaterials(){const c={};DB.uebungen.forEach(e=>matGroups(e.material).flat().forEach(m=>c[m]=(c[m]||0)+1));
+function allMaterials(){const c={};libActive().forEach(e=>matGroups(e.material).flat().forEach(m=>c[m]=(c[m]||0)+1));
   return Object.keys(c).sort((a,b)=>c[b]-c[a]||a.localeCompare(b,'de')).map(m=>({m,n:c[m]}));}
 function matOk(e,fehlt){return matGroups(e.material).every(g=>g.some(m=>!fehlt.has(m)));}
 function halleById(id){return (DB.settings.hallen||[]).find(h=>h.id===id)||null;}
 function fehltSet(id){const h=halleById(id);return new Set(h?h.fehlt:[]);}
-function allBereiche(){return TESTS.map(t=>t.name).concat([RUMPF],(DB&&DB.settings.bereicheExtra)||[]);}
+function allBereiche(){
+  const b=TESTS.map(t=>t.name).concat([RUMPF],(DB&&DB.settings.bereicheExtra)||[]);
+  if(libMode())STD.list.forEach(e=>{if(e.bereich&&!b.includes(e.bereich))b.push(e.bereich);});
+  return b;
+}
 function addBereich(n){n=String(n||'').trim();if(!n||allBereiche().includes(n))return n;DB.settings.bereicheExtra.push(n);return n;}
 const AKS=['E-Jugend','D-Jugend','C-Jugend','B-Jugend','A-Jugend','Aktive'];
 const ORTE=['Zuhause','Halle/Platz','Fitnessstudio'];
@@ -51,7 +55,7 @@ const ui={tab:'team', pid:null, teamJg:new Set(), teamSort:'score',
   tt:{monat:thisMonth(), name:'', test:'sprung', jg:new Set(), vals:{}},
   tr:{sub:'plan', s1:'auto', s2:'auto', extra:'', halle:'', niveau:'alle', ort:'alle', variante:1, ak:'auto'},
   tp:{jg:new Set(), format:'integriert', ort:'auto', variante:1, halle:''}, matEdit:null, cmp:'',
-  lib:{q:'', bereich:'', niveau:'', ort:'', ak:'', open:null}, mEmail:'',
+  lib:{q:'', bereich:'', niveau:'', ort:'', ak:'', src:'', open:null}, mEmail:'',
   me:{dauer:30, ort:'alle', variante:1, fokus:'auto'}};
 
 /* ---------- Hilfsfunktionen ---------- */
@@ -232,6 +236,7 @@ async function syncNow(){
         if(!SYNC.pending||!keepLocal()){await adopt(r);return;}
         SYNC.base=r.rev;
       }
+      if(stdDirty)await pushStd();else await refreshStd();
       await applyPlayerUpdates();
       if(SYNC.pending||rev==null){
         const mark=DB.meta.rev,res=await cloud.push(SYNC.team,rev==null?0:SYNC.base,await payload());
@@ -259,7 +264,7 @@ async function adopt(r){
   }
   DB=normalize(d);DB.meta.fileId=SYNC.team;SYNC.base=r.rev;SYNC.pending=false;
   await localStore.save(DB.meta.fileId,await payload(),label());await saveSync();
-  shareCache.clear();render();setSync('ok');
+  afterLoad();shareCache.clear();render();setSync('ok');
 }
 /* Freigaben: je Spielerin mit Code ein eigener Auszug, verschlüsselt mit ihrem Code */
 async function publishShares(){
@@ -326,7 +331,7 @@ async function connectTeam(name,pw){
     DB=normalize(res.db);DB.meta.fileId=r.team_id;
     Object.assign(SYNC,{team:r.team_id,name:r.name,role:r.role,base:d.rev,pending:false});
     await localStore.save(DB.meta.fileId,await payload(),label());await saveSync();
-    shareCache.clear();$('#bannerSlot').innerHTML='';ui.pid=null;setSync('ok');go('team');
+    afterLoad();shareCache.clear();$('#bannerSlot').innerHTML='';ui.pid=null;setSync('ok');go('team');
     toast('Verbunden mit „'+r.name+'“.');refreshLocalTeams();
   }catch(e){console.error(e);toast(/decrypt|OperationError/i.test(String(e&&e.name)+e)?'Die Daten ließen sich mit diesem Passwort nicht entschlüsseln.':cloudMsg(e));}
 }
@@ -940,7 +945,7 @@ function renderDaten(){
     <div class="panel"><h3>Sicherung und Neuanfang</h3>
       <p>Alle Daten als JSON-Datei sichern, z. B. als Backup oder um sie auf ein anderes Gerät zu übertragen.</p>
       <div class="row"><button class="btn" data-act="jsonOut">Daten sichern (JSON)</button><button class="btn" data-act="jsonIn">Daten einspielen</button><button class="btn danger" data-act="wipe">Spielerinnen und Messungen löschen</button></div>
-      <p class="hint">Stand: ${DB.meta.updated?new Date(DB.meta.updated).toLocaleString('de-DE'):'–'}, ${DB.players.length} Spielerinnen, ${DB.messungen.length} Messungen, ${DB.uebungen.length} Übungen.${SEC.key?' Achtung: Die JSON-Sicherung ist unverschlüsselt.':''}</p>
+      <p class="hint">Stand: ${DB.meta.updated?new Date(DB.meta.updated).toLocaleString('de-DE'):'–'}, ${DB.players.length} Spielerinnen, ${DB.messungen.length} Messungen, ${libMode()?DB.uebungen.length+' eigene Übungen und '+STD.list.length+' Standardübungen':DB.uebungen.length+' Übungen'}.${SEC.key?' Achtung: Die JSON-Sicherung ist unverschlüsselt.':''}</p>
     </div>
   </div>`;
 }
@@ -956,7 +961,7 @@ function renderTraining(){
 }
 /* Übungsauswahl: Bereich, Altersklasse, Niveau, Ort; gemischt je Variante, dann nach Ort-Priorität sortiert */
 function pickEx(bereich,o){
-  let pool=DB.uebungen.filter(e=>e.bereich===bereich&&akIdx(e.ak)<=o.akMax);
+  let pool=libActive().filter(e=>e.bereich===bereich&&akIdx(e.ak)<=o.akMax);
   if(o.kraft)pool=pool.filter(e=>e.kraft);
   if(o.niveau&&o.niveau!=='alle')pool=pool.filter(e=>e.niveau===o.niveau);
   if(o.orte)pool=pool.filter(e=>o.orte.includes(e.ort));
@@ -1000,7 +1005,7 @@ function matEditor(){
       <span class="row"><button class="btn small" data-act="halleRename" data-v="${h.id}">Umbenennen</button><button class="btn small danger" data-act="halleDel" data-v="${h.id}">Löschen</button><button class="btn small primary" data-act="matEdit" data-v="">Fertig</button></span></div>
     <p class="hint" style="margin-top:0">Antippen, was in dieser Halle <b>fehlt</b>. Übungen, die dieses Material brauchen, werden dann nicht mehr vorgeschlagen. Bei Angaben wie „Bank / Stuhl“ reicht eines davon.</p>
     <div class="matgrid">${ms.map(x=>`<button data-act="matToggle" data-v="${esc(x.m)}" aria-pressed="${!f.has(x.m)}" title="${x.n} Übung${x.n>1?'en':''}">${esc(x.m)} <small>${x.n}</small></button>`).join('')}</div>
-    <p class="hint" style="margin-bottom:0">${f.size?f.size+' Material'+(f.size>1?'ien':'')+' fehlen, '+DB.uebungen.filter(e=>!matOk(e,f)).length+' Übungen ausgeblendet.':'Alles vorhanden.'}</p>
+    <p class="hint" style="margin-bottom:0">${f.size?f.size+' Material'+(f.size>1?'ien':'')+' fehlen, '+libActive().filter(e=>!matOk(e,f)).length+' Übungen ausgeblendet.':'Alles vorhanden.'}</p>
   </div>`;
 }
 function playerAk(p){const ak=ageClass(p.jahrgang);return ak==='F-Jugend'?'E-Jugend':ak;}
@@ -1143,64 +1148,82 @@ function renderTeamProg(){
 
 /* Übungsbibliothek */
 function renderLib(){
-  const f=ui.lib,q=f.q.trim().toLowerCase(),extra=DB.settings.bereicheExtra;
-  const list=DB.uebungen.filter(e=>(!f.bereich||e.bereich===f.bereich)&&(!f.niveau||e.niveau===f.niveau)&&(!f.ort||e.ort===f.ort)&&(!f.ak||e.ak===f.ak)
+  const f=ui.lib,q=f.q.trim().toLowerCase(),extra=DB.settings.bereicheExtra,lm=libMode(),all=libAll();
+  const src=e=>!isStd(e)?'team':isOff(e)?'off':'std';
+  const list=all.filter(e=>(!f.bereich||e.bereich===f.bereich)&&(!f.niveau||e.niveau===f.niveau)&&(!f.ort||e.ort===f.ort)&&(!f.ak||e.ak===f.ak)&&(!f.src||src(e)===f.src)
     &&(!q||(e.name+' '+e.faehigkeit+' '+e.text+' '+e.material).toLowerCase().includes(q))).sort((a,b)=>a.nr-b.nr);
-  const sel=(k,label,vals)=>`<label class="field">${label}<select data-chg="lib" data-k="${k}">${opt('','alle',f[k])}${vals.map(v=>opt(v,v,f[k])).join('')}</select></label>`;
+  const sel=(k,label,vals)=>`<label class="field">${label}<select data-chg="lib" data-k="${k}">${opt('','alle',f[k])}${vals.map(v=>Array.isArray(v)?opt(v[0],v[1],f[k]):opt(v,v,f[k])).join('')}</select></label>`;
   const withMedia=e=>((e.bilder||[]).length?', '+e.bilder.length+' Bild'+(e.bilder.length>1?'er':''):'')+((e.videos||[]).length?', '+e.videos.length+' Video'+(e.videos.length>1?'s':''):'');
+  const tag=e=>!lm?'':isOff(e)?'<span class="chip c4">deaktiviert</span>':isStd(e)?'<span class="chip plain">Standard</span>':'<span class="chip c2">Mannschaft</span>';
+  const nOff=lm?DB.settings.stdOff.filter(n=>STD.list.some(e=>e.nr===n)).length:0;
+  const stdBox=!master||!cloudConfigured?'':lm?(STD.fallback?'':`<p class="hint" style="margin-bottom:0"><b>Master:</b> Standardübungen kannst du direkt bearbeiten, die Änderungen gelten sofort für alle Mannschaften. Eigene Übungen dieser Mannschaft lassen sich mit „In den Standard übernehmen“ für alle freigeben.</p>`)
+    :`<div class="panel" style="margin:12px 0 0;background:var(--sunk)"><b>Standardbibliothek für alle Mannschaften</b>
+      <p class="hint">Als Master kannst du diese Bibliothek (${DB.uebungen.length} Übungen mit Bildern und Videos) zum Standard für alle Mannschaften machen. Danach speichert jede Mannschaft nur noch ihre eigenen Übungen; Standardübungen können Trainer für ihre Mannschaft deaktivieren.</p>
+      <button class="btn primary" data-act="publishStd">Als Standard veröffentlichen</button></div>`;
   return `
   <div class="panel no-print" style="margin-bottom:16px">
     <h3>Sammlung erweitern</h3>
     <div class="row">
-      <button class="btn primary" data-act="addEx">Neue Übung anlegen</button>
+      <button class="btn primary" data-act="addEx">${lm?'Neue Übung für diese Mannschaft':'Neue Übung anlegen'}</button>
+      ${lm&&master&&!STD.fallback?'<button class="btn" data-act="addEx" data-v="std">Neue Standardübung</button>':''}
       <button class="btn" data-act="importEx">Übungen aus Excel oder CSV hinzufügen</button>
       <button class="btn ghost" data-act="exTemplate">Vorlage herunterladen</button>
       <button class="btn ghost" data-act="exExport">Bibliothek exportieren</button>
     </div>
-    <p class="hint">Vorlage ausfüllen, dann hinzufügen: Neue Übungen werden angehängt, Übungen mit gleichem Namen übersprungen. Bilder und Videos hängst du danach direkt an der Übung an.</p>
+    <p class="hint">${lm?'Die Bibliothek besteht aus den <b>Standardübungen</b> (für alle Mannschaften, pflegt der Master) und den <b>eigenen Übungen</b> dieser Mannschaft. Deaktivierte Standardübungen tauchen weder im Trainingsplan noch bei den Spielerinnen dieser Mannschaft auf. ':''}Vorlage ausfüllen, dann hinzufügen: Neue Übungen werden angehängt, Übungen mit gleichem Namen übersprungen. Bilder und Videos hängst du danach direkt an der Übung an.</p>
     <div class="bchips"><span class="hint">Eigene Bereiche:</span>${extra.map(b=>`<span class="chip plain">${esc(b)} <button data-act="delBereich" data-v="${esc(b)}" aria-label="Bereich ${esc(b)} entfernen" title="entfernen">×</button></span>`).join('')||'<span class="hint">noch keine</span>'}
       <button class="btn small" data-act="addBereich">Bereich hinzufügen</button></div>
+    ${stdBox}
   </div>
   <div class="opts no-print">
     <label class="field">Suche<input type="search" value="${esc(f.q)}" data-chg="lib" data-k="q" placeholder="Name, Fähigkeit, Material"></label>
+    ${lm?sel('src','Herkunft',[['std','Standard (aktiv)'],['off','Standard (deaktiviert)'],['team','eigene der Mannschaft']]):''}
     ${sel('bereich','Bereich',allBereiche())}${sel('niveau','Niveau',NIVEAUS)}${sel('ort','Ort',ORTE)}${sel('ak','ab Altersklasse',AKS)}
   </div>
-  <div class="section-h"><h2>${list.length} von ${DB.uebungen.length} Übungen</h2></div>
-  <div class="panel" style="padding:4px 12px">${list.map(e=>`<div class="libitem">
+  <div class="section-h"><h2>${list.length} von ${all.length} Übungen</h2>${nOff?`<span class="hint">${nOff} Standardübung${nOff>1?'en':''} für diese Mannschaft deaktiviert</span>`:''}</div>
+  <div class="panel" style="padding:4px 12px">${list.map(e=>`<div class="libitem${isOff(e)?' off':''}">
     <button data-act="libOpen" data-v="${e.nr}" aria-expanded="${f.open===e.nr}"><span class="nr">${e.nr}</span>
       <span class="nm"><b>${esc(e.name)}</b><small>${esc(e.bereich)}, ${esc(e.faehigkeit||'–')}, ${esc(e.niveau)}, ab ${esc(e.ak)}${withMedia(e)}</small></span>
-      <span class="chip plain">${esc(e.ort)}${e.kraft?', Kräftigung':''}</span></button>
+      ${tag(e)}<span class="chip plain">${esc(e.ort)}${e.kraft?', Kräftigung':''}</span></button>
     ${f.open===e.nr?libEdit(e):''}</div>`).join('')||'<div class="empty">Keine Übung passt zu diesen Filtern.</div>'}</div>
   <p class="hint">„Kräftigung“ = für das Teamprogramm geeignet. Eigene Bereiche (z. B. Koordination) erscheinen im Trainingsplan als „Zusatzbereich“.</p>`;
 }
 function libEdit(e){
-  const inp=(k,label,cls)=>`<label class="field ${cls||''}">${label}<input value="${esc(e[k])}" data-chg="exF" data-nr="${e.nr}" data-k="${k}"></label>`;
-  const sel=(k,label,vals,more)=>`<label class="field">${label}<select data-chg="exF" data-nr="${e.nr}" data-k="${k}">${vals.map(v=>opt(v,v,e[k])).join('')}${more||''}</select></label>`;
+  const ro=!canEdit(e),dis=ro?' disabled':'',std=isStd(e),lm=libMode();
+  const inp=(k,label,cls)=>`<label class="field ${cls||''}">${label}<input value="${esc(e[k])}" data-chg="exF" data-nr="${e.nr}" data-k="${k}"${dis}></label>`;
+  const sel=(k,label,vals,more)=>`<label class="field">${label}<select data-chg="exF" data-nr="${e.nr}" data-k="${k}"${dis}>${vals.map(v=>opt(v,v,e[k])).join('')}${more||''}</select></label>`;
   const bs=e.bilder||[],vs=e.videos||[];
+  const note=!lm||!std?'':ro?`<p class="hint wide" style="margin:0">Standardübung für alle Mannschaften. Ändern kann sie nur der Master. Für eine eigene Fassung „Als eigene Übung kopieren“; die Standardfassung wird dann für diese Mannschaft deaktiviert.</p>`
+    :`<p class="hint wide" style="margin:0"><b>Standardübung:</b> Änderungen gelten für alle Mannschaften.</p>`;
   return `<div class="libedit">
+    ${note}
     ${inp('name','Übung','wide')}
     ${sel('bereich','Bereich',allBereiche(),'<option value="__neu">Neuer Bereich …</option>')}${inp('faehigkeit','Fähigkeit')}${sel('niveau','Niveau',NIVEAUS)}${sel('ak','ab Altersklasse',AKS)}${sel('ort','Ort',ORTE)}
-    <label class="field">Kräftigung<select data-chg="exF" data-nr="${e.nr}" data-k="kraft">${opt('1','ja',e.kraft?'1':'0')}${opt('0','nein',e.kraft?'1':'0')}</select></label>
-    <label class="field wide">Beschreibung<textarea data-chg="exF" data-nr="${e.nr}" data-k="text" rows="4">${esc(e.text)}</textarea></label>
+    <label class="field">Kräftigung<select data-chg="exF" data-nr="${e.nr}" data-k="kraft"${dis}>${opt('1','ja',e.kraft?'1':'0')}${opt('0','nein',e.kraft?'1':'0')}</select></label>
+    <label class="field wide">Beschreibung<textarea data-chg="exF" data-nr="${e.nr}" data-k="text" rows="4"${dis}>${esc(e.text)}</textarea></label>
     ${inp('umfang','Umfang')}${inp('material','Material')}${inp('tipp','Coaching-Tipp','wide')}
     <div class="media-edit">
-      <div><b>Bilder</b> <span class="hint">das erste Bild erscheint groß im Trainingsplan</span></div>
-      <div class="thumbs">${bs.map((b,i)=>`<div class="th"><img src="${esc(b)}" alt="Bild ${i+1}"><button data-act="exImgDel" data-v="${e.nr}" data-i="${i}" aria-label="Bild ${i+1} entfernen">×</button></div>`).join('')}
-        <label class="btn small" style="align-self:center">Bilder hinzufügen<input type="file" accept="image/*" multiple hidden data-chg="exImg" data-nr="${e.nr}"></label></div>
-      <div><b>Videos</b> <span class="hint">Links (YouTube, Vimeo, Cloud) halten die Datei klein; Videodateien bis 20 MB werden direkt eingebettet</span></div>
+      <div><b>Bilder</b> ${ro?'':'<span class="hint">das erste Bild erscheint groß im Trainingsplan</span>'}</div>
+      <div class="thumbs">${bs.map((b,i)=>`<div class="th"><img src="${esc(b)}" alt="Bild ${i+1}">${ro?'':`<button data-act="exImgDel" data-v="${e.nr}" data-i="${i}" aria-label="Bild ${i+1} entfernen">×</button>`}</div>`).join('')||(ro?'<span class="hint">keine</span>':'')}
+        ${ro?'':`<label class="btn small" style="align-self:center">Bilder hinzufügen<input type="file" accept="image/*" multiple hidden data-chg="exImg" data-nr="${e.nr}"></label>`}</div>
+      <div><b>Videos</b> ${ro?'':'<span class="hint">Links (YouTube, Vimeo, Cloud) halten die Datei klein; Videodateien bis 20 MB werden direkt eingebettet</span>'}</div>
       ${vs.map((v,i)=>`<div class="vl"><span class="chip plain">${v.typ==='link'?'Link':'Datei, '+mb(v.size||0)}</span>
         ${v.typ==='link'?`<a href="${esc(v.url)}" target="_blank" rel="noopener noreferrer">${esc(v.titel||v.url)}</a>`:`<button class="btn ghost small" data-act="showVid" data-nr="${e.nr}" data-i="${i}">${esc(v.titel||'Video')} abspielen</button>`}
-        <button class="btn ghost small danger" data-act="delVid" data-v="${e.nr}" data-i="${i}">Entfernen</button></div>`).join('')}
-      <div class="row">
+        ${ro?'':`<button class="btn ghost small danger" data-act="delVid" data-v="${e.nr}" data-i="${i}">Entfernen</button>`}</div>`).join('')||(ro?'<span class="hint">keine</span>':'')}
+      ${ro?'':`<div class="row">
         <input id="vidUrl" type="url" placeholder="https://… Video-Link" style="flex:2;min-width:220px">
         <input id="vidTitle" placeholder="Titel (optional)" style="flex:1;min-width:140px">
         <button class="btn small" data-act="addVidLink" data-v="${e.nr}">Link hinzufügen</button>
         <label class="btn small">Videodatei hinzufügen<input type="file" accept="video/*" hidden data-chg="exVid" data-nr="${e.nr}"></label>
-      </div>
+      </div>`}
     </div>
     <div class="row wide">
-      <button class="btn small" data-act="dupEx" data-v="${e.nr}">Duplizieren</button>
-      <span style="flex:1"></span><button class="btn ghost small danger" data-act="delEx" data-v="${e.nr}">Übung löschen</button>
+      ${std?`<button class="btn small${isOff(e)?' primary':''}" data-act="stdToggle" data-v="${e.nr}">${isOff(e)?'Für diese Mannschaft wieder aktivieren':'Für diese Mannschaft deaktivieren'}</button>
+        <button class="btn small" data-act="dupEx" data-v="${e.nr}">Als eigene Übung kopieren</button>
+        <span style="flex:1"></span>${ro?'':`<button class="btn ghost small danger" data-act="delStd" data-v="${e.nr}">Aus dem Standard löschen (alle Mannschaften)</button>`}`
+      :`<button class="btn small" data-act="dupEx" data-v="${e.nr}">Duplizieren</button>
+        ${lm&&master&&!STD.fallback?`<button class="btn small" data-act="toStd" data-v="${e.nr}">In den Standard übernehmen</button>`:''}
+        <span style="flex:1"></span><button class="btn ghost small danger" data-act="delEx" data-v="${e.nr}">Übung löschen</button>`}
     </div></div>`;
 }
 
@@ -1243,6 +1266,8 @@ function importXlsx(buf){
   const P=Object.values(players);
   if(!P.length){toast('Keine Spielerinnen in der Datei gefunden.');return;}
   if(!confirm(`Gefunden: ${P.length} Spielerinnen, ${ms.length} Messungen${ex?' und '+ex.length+' Übungen':''}. Die aktuellen Daten werden dabei ersetzt. Fortfahren?`))return;
+  /* mit Standard: aus der Datei nur Übungen übernehmen, die es im Standard nicht gibt */
+  if(ex&&libMode()){const nm=x=>String(x).trim().toLowerCase(),kn=new Set(STD.list.map(e=>nm(e.name)));let nr=TEAM_NR;ex=ex.filter(e=>!kn.has(nm(e.name)));ex.forEach(e=>{e.nr=++nr;});}
   DB.players=P;DB.messungen=ms;if(ex)DB.uebungen=ex;ui.pid=null;changed();go('team');
   toast('Excel übernommen. Fotos bitte im Kader ergänzen.');
 }
@@ -1263,7 +1288,7 @@ async function exportXlsx(){
 }
 
 const EX_HEAD=['Nr.','Übung','Bereich','Fähigkeit','Niveau','ab Altersklasse','Ort','Beschreibung','Umfang','Material','Coaching-Tipp','Kräftigung','Video-Links'];
-function exRows(){return DB.uebungen.slice().sort((a,b)=>a.nr-b.nr).map(e=>{const r={};const v=[e.nr,e.name,e.bereich,e.faehigkeit,e.niveau,e.ak,e.ort,e.text,e.umfang,e.material,e.tipp,e.kraft?'ja':'nein',
+function exRows(){return libAll().slice().sort((a,b)=>a.nr-b.nr).map(e=>{const r={};const v=[e.nr,e.name,e.bereich,e.faehigkeit,e.niveau,e.ak,e.ort,e.text,e.umfang,e.material,e.tipp,e.kraft?'ja':'nein',
   (e.videos||[]).filter(x=>x.typ==='link').map(x=>x.url).join(' ')];EX_HEAD.forEach((h,i)=>r[h]=v[i]);return r;});}
 async function exTemplate(){
   let X;try{X=await loadXLSX();}catch(e){toast('Für die Vorlage wird einmalig eine Internetverbindung gebraucht.');return;}
@@ -1294,7 +1319,7 @@ async function importEx(){
   const C={name:col('übung','uebung'),bereich:col('bereich'),faehigkeit:col('fähigkeit','faehigkeit'),niveau:col('niveau'),ak:col('ab altersklasse','altersklasse'),ort:col('ort'),
     text:col('beschreibung'),umfang:col('umfang'),material:col('material'),tipp:col('coaching','tipp'),kraft:col('kräftigung','kraeftigung'),vid:col('video')};
   const get=(r,k)=>C[k]<0?'':String(r[C[k]]==null?'':r[C[k]]).trim();
-  const known=new Set(DB.uebungen.map(e=>norm(e.name))),neuB=new Set(),add=[];let dup=0;
+  const known=new Set(libAll().map(e=>norm(e.name))),neuB=new Set(),add=[];let dup=0;
   rows.slice(hi+1).forEach(r=>{
     const name=get(r,'name');if(!name||/^beispiel:/i.test(name))return;
     if(known.has(norm(name))){dup++;return;}known.add(norm(name));
@@ -1308,13 +1333,83 @@ async function importEx(){
   });
   if(!add.length){toast(dup?'Alle '+dup+' Übungen gibt es schon.':'Keine Übungen in der Datei gefunden.');return;}
   if(!confirm(`${add.length} neue Übungen hinzufügen?${dup?' '+dup+' mit gleichem Namen werden übersprungen.':''}${neuB.size?' Neue Bereiche: '+[...neuB].join(', ')+'.':''}`))return;
-  let nr=DB.uebungen.reduce((m,e)=>Math.max(m,e.nr),0);
+  let nr=newExNr()-1;
   neuB.forEach(addBereich);add.forEach(e=>{e.nr=++nr;DB.uebungen.push(e);});
   Object.assign(ui.lib,{q:'',bereich:'',niveau:'',ort:'',ak:'',open:null});changed();render();toast(add.length+' Übungen hinzugefügt.');
 }
 
+/* ---------- Übungsbibliothek: Standard für alle Mannschaften + eigene Übungen der Mannschaft ----------
+   STD kommt aus Supabase (std_library) bzw. der Offline-Kopie im Gerät. Im Mannschaftsdokument stehen dann nur
+   eigene Übungen (DB.uebungen, Nr. ab 100001) und die für diese Mannschaft deaktivierten Standardübungen
+   (DB.settings.stdOff). Solange es keinen Standard gibt, arbeitet die App wie bisher mit der vollen Kopie. */
+let STD=null,stdDirty=false;
+const STDSET=new WeakSet(),TEAM_NR=100000;
+function setStd(s){
+  STD=s&&s.payload&&Array.isArray(s.payload.uebungen)?{rev:s.rev,list:s.payload.uebungen}:null;
+  if(STD)STD.list.forEach(e=>{if(!Array.isArray(e.bilder))e.bilder=[];if(!Array.isArray(e.videos))e.videos=[];STDSET.add(e);});
+}
+const isStd=e=>STDSET.has(e);
+const libMode=()=>!!(STD&&DB&&!ME&&DB.meta.libV===2);
+/* alle Übungen inkl. deaktivierter (für die Bibliothek) bzw. nur die aktiven (für Pläne und Freigaben) */
+function libAll(){return libMode()?STD.list.concat(DB.uebungen):DB.uebungen;}
+function libActive(){return libMode()?STD.list.filter(e=>!DB.settings.stdOff.includes(e.nr)).concat(DB.uebungen):DB.uebungen;}
+const isOff=e=>isStd(e)&&DB.settings.stdOff.includes(e.nr);
+const exByNr=nr=>DB.uebungen.find(e=>e.nr===+nr)||(libMode()?STD.list.find(e=>e.nr===+nr):null)||null;
+function newExNr(){const m=DB.uebungen.reduce((m,e)=>Math.max(m,e.nr),0);return (libMode()?Math.max(TEAM_NR,m):m)+1;}
+/* Standardübungen ändert nur der Master, und nur mit echtem (nicht eingebautem) Standard */
+const canEdit=e=>!isStd(e)||(!!master&&!STD.fallback);
+function exSaved(e){if(isStd(e))stdChanged();else changed();}
+const EXF=['name','bereich','faehigkeit','niveau','ak','ort','text','umfang','material','tipp'];
+function sameEx(a,b){
+  return EXF.every(k=>String(a[k]==null?'':a[k])===String(b[k]==null?'':b[k]))&&!!a.kraft===!!b.kraft
+    &&JSON.stringify(a.bilder||[])===JSON.stringify(b.bilder||[])&&JSON.stringify(a.videos||[])===JSON.stringify(b.videos||[]);
+}
+/* Einmalige Umstellung einer Mannschaft mit voller Kopie: Übungen wie im Standard (oder unverändert aus der
+   ursprünglichen Vorlage) entfallen; selbst geänderte bleiben als eigene Übung, die Standardfassung wird für
+   diese Mannschaft deaktiviert, damit Spielerinnen nicht beide bekommen. */
+function migrateLib(){
+  if(!STD||STD.fallback||!DB||ME||DB.meta.libV===2)return false;
+  const nm=x=>String(x||'').trim().toLowerCase(),sn=new Map(STD.list.map(e=>[e.nr,e])),orig=new Map(uebungenStart.map(e=>[e.nr,e]));
+  const keep=[],off=new Set(DB.settings.stdOff);
+  DB.uebungen.forEach(t=>{const s=sn.get(t.nr);
+    if(s&&nm(s.name)===nm(t.name)){const o=orig.get(t.nr);if(sameEx(t,s)||(o&&sameEx(t,o)))return;off.add(s.nr);}
+    keep.push(t);});
+  let nr=TEAM_NR;keep.sort((a,b)=>a.nr-b.nr).forEach(t=>{t.nr=++nr;});
+  DB.uebungen=keep;DB.settings.stdOff=[...off];DB.meta.libV=2;
+  return true;
+}
+/* nach jedem Laden eines Mannschaftsdokuments: ohne Offline-Kopie des Standards vorerst die eingebaute Vorlage */
+function afterLoad(){
+  if(!STD&&DB&&DB.meta.libV===2){setStd({rev:0,payload:{uebungen:structuredClone(uebungenStart)}});STD.fallback=true;}
+  if(migrateLib())changed();
+}
+async function refreshStd(){
+  if(!cloudConfigured||ME||!navigator.onLine||stdDirty)return;
+  try{
+    const rev=await cloud.stdRev();if(rev==null||(STD&&!STD.fallback&&STD.rev===rev))return;
+    const r=await cloud.stdPull();if(!r)return;
+    setStd(r);await localStore.setStd(r);
+    if(DB&&!document.body.classList.contains('locked')){afterLoad();render();}
+  }catch(e){console.error(e);}
+}
+function stdChanged(){
+  if(!STD||STD.fallback||!master)return;
+  stdDirty=true;clearTimeout(stdChanged.t);stdChanged.t=setTimeout(pushStd,1500);
+}
+async function pushStd(){
+  if(!stdDirty||!STD)return;
+  const payload={v:1,uebungen:STD.list};
+  try{
+    const res=await cloud.stdPush(STD.rev,payload);
+    stdDirty=false;
+    if(res.conflict){toast('Der Standard wurde inzwischen woanders geändert und wird neu geladen.');STD.fallback=true;await refreshStd();return;}
+    STD.rev=res.rev;await localStore.setStd({rev:res.rev,payload});
+    /* Freigaben der eigenen Mannschaft mit dem neuen Standard aktualisieren */
+    if(SYNC.team)schedulePush(500);
+  }catch(e){console.error(e);toast('Standard konnte nicht gespeichert werden. '+cloudMsg(e));}
+}
+
 /* ---------- Aktionen ---------- */
-const exByNr=nr=>DB.uebungen.find(e=>e.nr===+nr);
 const ACT={
   tab:a=>go(a.dataset.v),
   lock:async()=>{await persist();location.reload();},
@@ -1335,27 +1430,54 @@ const ACT={
   reroll:()=>{ui.tr.variante=ui.tr.variante%9+1;render();},
   tpReroll:()=>{ui.tp.variante=ui.tp.variante%9+1;render();},
   libOpen:a=>{const n=+a.dataset.v;ui.lib.open=ui.lib.open===n?null:n;render();},
-  addEx:()=>{const nr=DB.uebungen.reduce((m,e)=>Math.max(m,e.nr),0)+1;
-    DB.uebungen.push({nr,name:'Neue Übung',bereich:ui.lib.bereich||TESTS[0].name,faehigkeit:'',niveau:'Einsteiger',ak:'E-Jugend',ort:'Zuhause',text:'',umfang:'',material:'',tipp:'',kraft:true,bilder:[],videos:[]});
-    Object.assign(ui.lib,{q:'',niveau:'',ort:'',ak:'',open:nr});changed();render();
-    const el=document.querySelector('.libedit input');if(el){el.focus();el.select();el.scrollIntoView({block:'center'});}},
-  delEx:a=>{const e=exByNr(a.dataset.v);if(e&&confirm('Übung „'+e.name+'“ löschen?')){DB.uebungen=DB.uebungen.filter(x=>x!==e);ui.lib.open=null;changed();render();}},
-  exImgDel:a=>{exByNr(a.dataset.v).bilder.splice(+a.dataset.i,1);changed();render();},
-  delVid:a=>{exByNr(a.dataset.v).videos.splice(+a.dataset.i,1);changed();render();},
+  addEx:a=>{const toStd=a&&a.dataset.v==='std'&&libMode()&&master&&!STD.fallback;
+    const e={nr:0,name:'Neue Übung',bereich:ui.lib.bereich||TESTS[0].name,faehigkeit:'',niveau:'Einsteiger',ak:'E-Jugend',ort:'Zuhause',text:'',umfang:'',material:'',tipp:'',kraft:true,bilder:[],videos:[]};
+    if(toStd){e.nr=STD.list.reduce((m,x)=>Math.max(m,x.nr),0)+1;STD.list.push(e);STDSET.add(e);stdChanged();}
+    else{e.nr=newExNr();DB.uebungen.push(e);changed();}
+    Object.assign(ui.lib,{q:'',niveau:'',ort:'',ak:'',src:'',open:e.nr});render();
+    const el=document.querySelector('.libedit input:not([disabled])');if(el){el.focus();el.select();el.scrollIntoView({block:'center'});}},
+  delEx:a=>{const e=exByNr(a.dataset.v);if(e&&!isStd(e)&&confirm('Übung „'+e.name+'“ löschen?')){DB.uebungen=DB.uebungen.filter(x=>x!==e);ui.lib.open=null;changed();render();}},
+  exImgDel:a=>{const e=exByNr(a.dataset.v);if(!e||!canEdit(e))return;e.bilder.splice(+a.dataset.i,1);exSaved(e);render();},
+  delVid:a=>{const e=exByNr(a.dataset.v);if(!e||!canEdit(e))return;e.videos.splice(+a.dataset.i,1);exSaved(e);render();},
   addVidLink:a=>{const u=$('#vidUrl').value.trim(),t=$('#vidTitle').value.trim();
     if(!isHttp(u)){toast('Bitte einen vollständigen Link eintragen, der mit https:// beginnt.');return;}
-    exByNr(a.dataset.v).videos.push({typ:'link',url:u,titel:t||'Video'});changed();render();},
+    const e=exByNr(a.dataset.v);if(!e||!canEdit(e))return;e.videos.push({typ:'link',url:u,titel:t||'Video'});exSaved(e);render();},
   showImg:a=>{const e=exByNr(a.dataset.nr);if(!e)return;const i=+a.dataset.i;openMedia(e.name+(e.bilder.length>1?' ('+(i+1)+'/'+e.bilder.length+')':''),`<img src="${esc(e.bilder[i])}" alt="">`);},
   showVid:a=>{const e=exByNr(a.dataset.nr),v=e&&e.videos[+a.dataset.i];if(!v)return;
     if(v.typ==='link'){window.open(v.url,'_blank','noopener');return;}
     openMedia(e.name+': '+(v.titel||'Video'),`<video src="${esc(v.data)}" controls autoplay playsinline></video>`);},
   closeMedia:()=>{const d=$('#media');if(d.close)d.close();else d.removeAttribute('open');},
-  dupEx:a=>{const e=exByNr(a.dataset.v);if(!e)return;const nr=DB.uebungen.reduce((m,x)=>Math.max(m,x.nr),0)+1;
-    const c=JSON.parse(JSON.stringify(e));c.nr=nr;c.name=e.name+' (Kopie)';DB.uebungen.push(c);ui.lib.open=nr;Object.assign(ui.lib,{q:'',bereich:'',niveau:'',ort:'',ak:''});changed();render();
-    const el=document.querySelector('.libedit input');if(el){el.focus();el.select();el.scrollIntoView({block:'center'});}toast('Kopie angelegt.');},
+  /* Kopie ist immer eine eigene Übung der Mannschaft; bei einer Standardübung wird das Original für diese Mannschaft deaktiviert */
+  dupEx:a=>{const e=exByNr(a.dataset.v);if(!e)return;const std=isStd(e)&&libMode();
+    const c=JSON.parse(JSON.stringify(e));c.nr=newExNr();c.name=e.name+(std?' (eigene Fassung)':' (Kopie)');DB.uebungen.push(c);
+    if(std&&!DB.settings.stdOff.includes(e.nr))DB.settings.stdOff.push(e.nr);
+    ui.lib.open=c.nr;Object.assign(ui.lib,{q:'',bereich:'',niveau:'',ort:'',ak:'',src:''});changed();render();
+    const el=document.querySelector('.libedit input:not([disabled])');if(el){el.focus();el.select();el.scrollIntoView({block:'center'});}
+    toast(std?'Eigene Fassung angelegt, die Standardübung ist für diese Mannschaft deaktiviert.':'Kopie angelegt.');},
+  stdToggle:a=>{if(!libMode())return;const n=+a.dataset.v,o=DB.settings.stdOff,i=o.indexOf(n);
+    if(i<0)o.push(n);else o.splice(i,1);changed();render();
+    toast(i<0?'Für diese Mannschaft deaktiviert. Spielerinnen bekommen die Übung nicht mehr.':'Wieder aktiviert.');},
+  toStd:a=>{const e=exByNr(a.dataset.v);if(!e||isStd(e)||!libMode()||!master||STD.fallback)return;
+    if(!confirm('„'+e.name+'“ in den Standard übernehmen? Die Übung steht dann allen Mannschaften zur Verfügung und wird nur noch vom Master geändert.'))return;
+    DB.uebungen=DB.uebungen.filter(x=>x!==e);e.nr=STD.list.reduce((m,x)=>Math.max(m,x.nr),0)+1;STD.list.push(e);STDSET.add(e);
+    ui.lib.open=e.nr;stdChanged();changed();render();toast('In den Standard übernommen.');},
+  delStd:a=>{const e=exByNr(a.dataset.v);if(!e||!isStd(e)||!canEdit(e))return;
+    if(!confirm('„'+e.name+'“ aus dem Standard löschen? Die Übung verschwindet für ALLE Mannschaften.'))return;
+    if(!confirm('Wirklich für alle Mannschaften löschen? Das lässt sich nicht rückgängig machen.'))return;
+    STD.list=STD.list.filter(x=>x!==e);ui.lib.open=null;stdChanged();render();},
+  publishStd:async()=>{if(!master||libMode())return;
+    if(!confirm('Die '+DB.uebungen.length+' Übungen dieser Mannschaft werden zur Standardbibliothek für alle Mannschaften. Fortfahren?'))return;
+    let base;try{base=await cloud.stdRev();}catch(e){console.error(e);toast(cloudMsg(e));return;}
+    if(base&&!confirm('Es gibt schon einen Standard. Er wird durch diese Bibliothek ersetzt, für alle Mannschaften. Wirklich?'))return;
+    toast('Veröffentliche Standard …');
+    const payload={v:1,uebungen:JSON.parse(JSON.stringify(DB.uebungen)).sort((a,b)=>a.nr-b.nr)};
+    try{const res=await cloud.stdPush(base||0,payload);if(res.conflict){toast('Der Standard wurde gerade geändert. Bitte noch einmal versuchen.');return;}
+      const r={rev:res.rev,payload};setStd(r);await localStore.setStd(r);afterLoad();render();
+      toast('Standard veröffentlicht: '+STD.list.length+' Übungen für alle Mannschaften.');}
+    catch(e){console.error(e);toast(cloudMsg(e));}},
   addBereich:()=>{const n=prompt('Name des neuen Bereichs (z. B. Koordination, Beweglichkeit):');if(!n||!n.trim())return;
     if(allBereiche().includes(n.trim())){toast('Den Bereich gibt es schon.');return;}addBereich(n);changed();render();toast('Bereich „'+n.trim()+'“ angelegt.');},
-  delBereich:a=>{const b=a.dataset.v,n=DB.uebungen.filter(e=>e.bereich===b).length;
+  delBereich:a=>{const b=a.dataset.v,n=libAll().filter(e=>e.bereich===b).length;
     if(n){toast(n+' Übung'+(n>1?'en nutzen':' nutzt')+' diesen Bereich noch. Erst umstellen oder löschen.');return;}
     DB.settings.bereicheExtra=DB.settings.bereicheExtra.filter(x=>x!==b);changed();render();},
   matEdit:a=>{ui.matEdit=a.dataset.v&&ui.matEdit!==a.dataset.v?a.dataset.v:null;render();},
@@ -1395,7 +1517,7 @@ const ACT={
   jsonIn:async()=>{const f=await pickFile('.json,application/json');if(!f)return;
     try{const d=JSON.parse(await f.text());if(!Array.isArray(d.players)||!Array.isArray(d.messungen))throw 0;
       if(!confirm(`${d.players.length} Spielerinnen und ${d.messungen.length} Messungen einspielen? Die aktuellen Daten werden ersetzt.`))return;
-      const keep=DB.meta.fileId,lib=DB.uebungen;DB=normalize(d);DB.meta.fileId=keep;if(!d.uebungen)DB.uebungen=lib;changed();go('team');toast('Daten eingespielt.');}
+      const keep=DB.meta.fileId,lib=DB.uebungen,v2=DB.meta.libV===2;DB=normalize(d);DB.meta.fileId=keep;if(!d.uebungen){DB.uebungen=lib;if(v2)DB.meta.libV=2;}afterLoad();changed();go('team');toast('Daten eingespielt.');}
     catch(e){toast('Die Datei enthält keine gültige Leistungsdiagnostik-Sicherung.');}},
   wipe:()=>{if(confirm('Wirklich alle Spielerinnen und Messungen löschen? Übungen und Logos bleiben.')){DB.players=[];DB.messungen=[];changed();go('kader');}},
   xlsxIn:async()=>{let X;try{X=await loadXLSX();}catch(e){toast('Für die Übernahme wird einmalig eine Internetverbindung gebraucht.');return;}
@@ -1411,13 +1533,13 @@ const ACT={
     if(!Array.isArray(d.players)){toast('In dieser Datei wurden keine Leistungsdiagnostik-Daten gefunden.');return;}
     if(!confirm(`${d.players.length} Spielerinnen und ${(d.messungen||[]).length} Messungen übernehmen? Die aktuellen Daten werden ersetzt`+(SYNC.team?', auch auf allen verbundenen Geräten.':'.')))return;
     /* Online-Mannschaft: Mannschaftspasswort und Id bleiben, sonst koennen die anderen Geraete nicht mehr entschluesseln */
-    const online=!!SYNC.team,keep=DB.meta.fileId,lib=DB.uebungen;
+    const online=!!SYNC.team,keep=DB.meta.fileId,lib=DB.uebungen,v2=DB.meta.libV===2;
     /* Zugangscodes der Spielerinnen gab es in der alten Datei noch nicht: vorhandene uebernehmen */
     const codes=new Map();DB.players.forEach(p=>{if(p.code){codes.set('id:'+p.id,p.code);codes.set('n:'+p.name,p.code);}});
     if(r&&!online){SEC.key=r.key;SEC.salt=r.salt;SEC.pw=r.pw;}
-    DB=normalize(d);if(keep)DB.meta.fileId=keep;if(!d.uebungen||!d.uebungen.length)DB.uebungen=lib;
+    DB=normalize(d);if(keep)DB.meta.fileId=keep;if(!d.uebungen||!d.uebungen.length){DB.uebungen=lib;if(v2)DB.meta.libV=2;}
     DB.players.forEach(p=>{if(!p.code)p.code=codes.get('id:'+p.id)||codes.get('n:'+p.name)||'';if(!p.code)delete p.code;});
-    ui.pid=null;$('#bannerSlot').innerHTML='';changed();applyTheme();go('team');
+    afterLoad();ui.pid=null;$('#bannerSlot').innerHTML='';changed();applyTheme();go('team');
     toast(r&&!online?'Datei übernommen. Das Passwort der Datei schützt jetzt auch die Daten in der App.':'Datei übernommen.');},
   join:async()=>{const n=$('#joinName').value.trim(),pw=$('#joinPw').value;
     if(!n||!pw){toast('Bitte Mannschaftsname und Passwort eingeben.');return;}
@@ -1503,18 +1625,19 @@ const CHG={
     p[el.dataset.f]=v;changed();},
   photo:async el=>{const f=el.files[0];if(!f)return;try{pById(el.dataset.id).foto=await readSquare(f,240);changed();render();}catch(e){toast('Das Bild konnte nicht gelesen werden.');}},
   logo:async el=>{const f=el.files[0];if(!f)return;try{DB.settings[el.dataset.k]=await readFit(f,320,true);changed();render();}catch(e){toast('Das Bild konnte nicht gelesen werden.');}},
-  exImg:async el=>{const fs=[...el.files];if(!fs.length)return;const e=exByNr(el.dataset.nr);let ok=0;
+  exImg:async el=>{const fs=[...el.files];if(!fs.length)return;const e=exByNr(el.dataset.nr);if(!e||!canEdit(e))return;let ok=0;
     for(const f of fs){try{e.bilder.push(await readFit(f,800,false));ok++;}catch(x){}}
-    if(ok){changed();render();}if(ok<fs.length)toast((fs.length-ok)+' Bild(er) konnten nicht gelesen werden.');},
+    if(ok){exSaved(e);render();}if(ok<fs.length)toast((fs.length-ok)+' Bild(er) konnten nicht gelesen werden.');},
   exVid:async el=>{const f=el.files[0];if(!f)return;
     if(f.size>20*1048576){toast('Das Video ist '+mb(f.size)+' groß. Maximal 20 MB, für größere Videos bitte einen Link verwenden.');return;}
     if(f.size>5*1048576&&!confirm('Das Video ist '+mb(f.size)+' groß und macht die Datei entsprechend größer. Trotzdem einbetten?'))return;
-    try{const data=await readDataURL(f);exByNr(el.dataset.nr).videos.push({typ:'datei',data,size:f.size,titel:f.name.replace(/\.[^.]+$/,'')});changed();render();toast('Video eingebettet.');}
+    const e=exByNr(el.dataset.nr);if(!e||!canEdit(e))return;
+    try{const data=await readDataURL(f);e.videos.push({typ:'datei',data,size:f.size,titel:f.name.replace(/\.[^.]+$/,'')});exSaved(e);render();toast('Video eingebettet.');}
     catch(x){toast('Das Video konnte nicht gelesen werden.');}},
-  exF:el=>{const e=exByNr(el.dataset.nr);if(!e)return;const k=el.dataset.k;let v=el.value;
+  exF:el=>{const e=exByNr(el.dataset.nr);if(!e||!canEdit(e))return;const k=el.dataset.k;let v=el.value;
     if(k==='kraft')v=v==='1';else if(k==='name'&&!v.trim()){el.value=e.name;return;}
     if(k==='bereich'&&v==='__neu'){const n=prompt('Name des neuen Bereichs:');if(!n||!n.trim()){el.value=e.bereich;return;}v=addBereich(n);}
-    e[k]=v;changed();if(['name','bereich','niveau','ak','ort','kraft','faehigkeit'].includes(k))render();},
+    e[k]=v;exSaved(e);if(['name','bereich','niveau','ak','ort','kraft','faehigkeit'].includes(k))render();},
   lib:el=>{ui.lib[el.dataset.k]=el.value;ui.lib.open=null;render();},
   tr:el=>{if(el.dataset.k==='halle'&&el.value==='__neu'){newHalle('tr');return;}ui.tr[el.dataset.k]=el.value;if(el.dataset.k==='halle')ui.matEdit=null;render();},
   tp:el=>{if(el.dataset.k==='halle'&&el.value==='__neu'){newHalle('tp');return;}ui.tp[el.dataset.k]=el.value;if(el.dataset.k==='halle')ui.matEdit=null;render();},
@@ -1559,6 +1682,7 @@ window.addEventListener('appinstalled',()=>{installPrompt=null;if(DB&&ui.tab==='
 /* ---------- Start ---------- */
 function normalize(d){
   d.meta=d.meta||{};d.settings=d.settings||{};d.players=d.players||[];d.messungen=d.messungen||[];d.uebungen=d.uebungen||[];
+  if(!Array.isArray(d.settings.stdOff))d.settings.stdOff=[];
   if(!d.settings.overdueDays)d.settings.overdueDays=180;
   ['verein','mannschaft','logoVerein','logoTeam'].forEach(k=>{if(d.settings[k]==null)d.settings[k]='';});
   d.messungen.forEach(m=>{m.w=m.w||{};});
@@ -1571,6 +1695,7 @@ function start(){
   DB=normalize(DB);
   if(!DB.meta.fileId)DB.meta.fileId='ld-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   document.body.classList.remove('locked');
+  afterLoad();
   updateState();render();
   let off=false;try{off=!!localStorage.getItem('ld-welcome-off');}catch(e){}
   if(!DB.players.length&&!off)
@@ -1580,7 +1705,9 @@ function start(){
   installHint();
   localStore.persist().then(ok=>{persisted=ok;});
   refreshLocalTeams();
-  refreshAccount().then(()=>{if(ui.tab==='daten')render();});
+  /* Master-Rechte entscheiden, ob Standardübungen bearbeitbar sind */
+  refreshAccount().then(()=>{if(ui.tab==='daten'||ui.tab==='training')render();});
+  refreshStd();
   localStore.syncState(DB.meta.fileId).then(st=>{if(st&&st.team){Object.assign(SYNC,st);updateState();syncNow();}}).catch(e=>console.error(e));
   let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(fitList,120);});
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitList);
@@ -1612,11 +1739,13 @@ function showLock(w){
 }
 async function boot(){
   if(cloudConfigured&&await bootPlayer())return;
+  try{setStd(await localStore.std());}catch(e){console.error(e);}
   let w=null;
   try{const id=await localStore.current();if(id)w=await localStore.load(id);}
   catch(e){console.error(e);toast('Der Gerätespeicher ist nicht verfügbar (privates Fenster?). Änderungen gehen beim Schließen verloren.');}
   if(w&&w.enc){showLock(w);return;}
-  DB=w||{meta:{},settings:{},players:[],messungen:[],uebungen:structuredClone(uebungenStart)};
+  /* neue Mannschaft: mit Standard nur eigene Übungen, sonst Kopie der Vorlage */
+  DB=w||(STD?{meta:{libV:2},settings:{},players:[],messungen:[],uebungen:[]}:{meta:{},settings:{},players:[],messungen:[],uebungen:structuredClone(uebungenStart)});
   start();
 }
 /* ---------- Ansicht für Spielerinnen (Zugang per Code) ---------- */

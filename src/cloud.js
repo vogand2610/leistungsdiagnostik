@@ -45,6 +45,19 @@ export const cloud={
     return data.length?{rev:base+1}:{conflict:true};
   },
 
+  /* ---------- Standard-Uebungsbibliothek (eine Zeile, unverschluesselt, schreiben nur Master) ---------- */
+  async stdRev(){const c=await sb();const {data,error}=await c.from('std_library').select('rev').eq('id',1).maybeSingle();if(error)fail(error);return data?data.rev:null;},
+  async stdPull(){const c=await sb();const {data,error}=await c.from('std_library').select('rev,payload').eq('id',1).maybeSingle();if(error)fail(error);return data;},
+  /* wie push: schreibt nur, wenn der Server noch auf Stand base ist; sonst {conflict:true} */
+  async stdPush(base,payload){
+    const c=await sb();
+    if(!base){const {error}=await c.from('std_library').insert({id:1,rev:1,payload});
+      if(error){if(error.code==='23505')return {conflict:true};fail(error);}return {rev:1};}
+    const {data,error}=await c.from('std_library').update({rev:base+1,payload}).eq('id',1).eq('rev',base).select('rev');
+    if(error){if(error.code==='40001')return {conflict:true};fail(error);}
+    return data.length?{rev:base+1}:{conflict:true};
+  },
+
   /* ---------- Freigaben fuer Spielerinnen ---------- */
   async putShares(id,rows){if(!rows.length)return;const c=await sb();
     const {error}=await c.from('player_shares').upsert(rows.map(r=>({lookup:r.lookup,team_id:id,data:r.data,updated_at:new Date().toISOString()})));if(error)fail(error);},
