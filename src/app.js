@@ -1158,7 +1158,7 @@ function renderLib(){
   const withMedia=e=>((e.bilder||[]).length?', '+e.bilder.length+' Bild'+(e.bilder.length>1?'er':''):'')+((e.videos||[]).length?', '+e.videos.length+' Video'+(e.videos.length>1?'s':''):'');
   const tag=e=>!lm?'':isOff(e)?'<span class="chip c4">deaktiviert</span>':isStd(e)?'<span class="chip plain">Standard</span>':'<span class="chip c2">Mannschaft</span>';
   const nOff=lm?DB.settings.stdOff.filter(n=>STD.list.some(e=>e.nr===n)).length:0;
-  const stdBox=!master||!cloudConfigured?'':lm?(STD.fallback?'':`<p class="hint" style="margin-bottom:0"><b>Master:</b> Standardübungen kannst du direkt bearbeiten, die Änderungen gelten sofort für alle Mannschaften. Eigene Übungen dieser Mannschaft lassen sich mit „In den Standard übernehmen“ für alle freigeben.</p>`)
+  const stdBox=!master||!cloudConfigured?'':lm?(STD.fallback?`<p class="hint" style="margin-bottom:0"><b>Master:</b> Der Standard ist noch nicht aus der Datenbank geladen (z. B. offline), deshalb lässt er sich gerade nicht bearbeiten. Mit Internet die App neu laden.</p>`:`<p class="hint" style="margin-bottom:0"><b>Master:</b> Standardübungen kannst du direkt bearbeiten, die Änderungen gelten sofort für alle Mannschaften. Eigene Übungen dieser Mannschaft lassen sich mit „In den Standard übernehmen“ für alle freigeben.</p>`)
     :`<div class="panel" style="margin:12px 0 0;background:var(--sunk)"><b>Standardbibliothek für alle Mannschaften</b>
       <p class="hint">Als Master kannst du diese Bibliothek (${DB.uebungen.length} Übungen mit Bildern und Videos) zum Standard für alle Mannschaften machen. Danach speichert jede Mannschaft nur noch ihre eigenen Übungen; Standardübungen können Trainer für ihre Mannschaft deaktivieren.</p>
       <button class="btn primary" data-act="publishStd">Als Standard veröffentlichen</button></div>`;
@@ -1168,6 +1168,7 @@ function renderLib(){
     <div class="row">
       <button class="btn primary" data-act="addEx">${lm?'Neue Übung für diese Mannschaft':'Neue Übung anlegen'}</button>
       ${lm&&master&&!STD.fallback?'<button class="btn" data-act="addEx" data-v="std">Neue Standardübung</button>':''}
+      ${lm&&master&&!STD.fallback&&DB.uebungen.length?`<button class="btn" data-act="toStdAll">Alle ${DB.uebungen.length} eigenen Übungen in den Standard übernehmen</button>`:''}
       <button class="btn" data-act="importEx">Übungen aus Excel oder CSV hinzufügen</button>
       <button class="btn ghost" data-act="exTemplate">Vorlage herunterladen</button>
       <button class="btn ghost" data-act="exExport">Bibliothek exportieren</button>
@@ -1464,6 +1465,12 @@ const ACT={
     if(!confirm('„'+e.name+'“ in den Standard übernehmen? Die Übung steht dann allen Mannschaften zur Verfügung und wird nur noch vom Master geändert.'))return;
     DB.uebungen=DB.uebungen.filter(x=>x!==e);e.nr=STD.list.reduce((m,x)=>Math.max(m,x.nr),0)+1;STD.list.push(e);STDSET.add(e);
     ui.lib.open=e.nr;stdChanged();changed();render();toast('In den Standard übernommen.');},
+  toStdAll:()=>{if(!libMode()||!master||STD.fallback||!DB.uebungen.length)return;
+    const n=DB.uebungen.length;
+    if(!confirm(n+' eigene Übungen dieser Mannschaft in den Standard übernehmen? Sie stehen dann allen Mannschaften zur Verfügung und werden nur noch vom Master geändert.'))return;
+    let nr=STD.list.reduce((m,x)=>Math.max(m,x.nr),0);
+    DB.uebungen.sort((a,b)=>a.nr-b.nr).forEach(e=>{e.nr=++nr;STD.list.push(e);STDSET.add(e);});
+    DB.uebungen=[];ui.lib.open=null;stdChanged();changed();render();toast(n+' Übungen in den Standard übernommen.');},
   delStd:a=>{const e=exByNr(a.dataset.v);if(!e||!isStd(e)||!canEdit(e))return;
     if(!confirm('„'+e.name+'“ aus dem Standard löschen? Die Übung verschwindet für ALLE Mannschaften.'))return;
     if(!confirm('Wirklich für alle Mannschaften löschen? Das lässt sich nicht rückgängig machen.'))return;
