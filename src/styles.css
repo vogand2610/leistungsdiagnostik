@@ -234,6 +234,8 @@ table.ms td.mo{width:150px}
 .seg button[aria-current="true"]{background:var(--ink);color:var(--surface)}
 .opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:6px}
 .opts select{width:100%}
+.chk{display:flex;align-items:center;gap:8px;min-height:38px;color:var(--ink);cursor:pointer}
+.chk input{width:18px;height:18px;margin:0;accent-color:var(--ink)}
 table.pr{border-collapse:collapse;width:100%;min-width:600px}
 table.pr td{padding:8px 6px;border-bottom:1px solid var(--line)}
 table.pr td.pnum{font-family:var(--cond);font-size:22px;font-weight:800;width:60px;text-align:center}

@@ -53,10 +53,10 @@ const shareCache=new Map(), shareKeys=new Map();
 const SEC={key:null,salt:null,pw:null};
 const ui={tab:'team', pid:null, teamJg:new Set(), teamSort:'score',
   tt:{monat:thisMonth(), name:'', test:'sprung', jg:new Set(), vals:{}},
-  tr:{sub:'plan', s1:'auto', s2:'auto', extra:'', halle:'', niveau:'alle', ort:'alle', variante:1, ak:'auto'},
-  tp:{jg:new Set(), format:'integriert', ort:'auto', variante:1, halle:''}, matEdit:null, cmp:'',
-  lib:{q:'', bereich:'', niveau:'', ort:'', ak:'', src:'', open:null}, mEmail:'',
-  me:{dauer:30, ort:'alle', variante:1, fokus:'auto'}};
+  tr:{sub:'plan', s1:'auto', s2:'auto', extra:'', halle:'', niveau:'alle', ort:'alle', variante:1, ak:'auto', partner:true},
+  tp:{jg:new Set(), format:'integriert', ort:'auto', variante:1, halle:'', partner:true}, matEdit:null, cmp:'',
+  lib:{q:'', bereich:'', niveau:'', ort:'', ak:'', src:'', partner:'', open:null}, mEmail:'',
+  me:{dauer:30, ort:'alle', variante:1, fokus:'auto', partner:true}};
 
 /* ---------- Hilfsfunktionen ---------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -710,7 +710,7 @@ function meBlocks(){
   const pools=ME.pools||{},f=o.fokus!=='auto'&&pools[o.fokus]?(o.fokus===RUMPF?[]:[o.fokus]):(ME.fokus||[]).filter(Boolean);
   const pat=f.length>1?[f[0],RUMPF,f[1],f[0],f[1],RUMPF]:f.length?[f[0],RUMPF,f[0]]:[RUMPF];
   const fehlt=meFehlt();
-  const q={};Object.keys(pools).forEach(b=>{q[b]=shuffled(pools[b].map(exByNr).filter(e=>e&&(o.ort==='alle'||e.ort===o.ort)&&matOk(e,fehlt)),ME.player.id+'|'+o.variante+'|'+b);});
+  const q={};Object.keys(pools).forEach(b=>{q[b]=shuffled(pools[b].map(exByNr).filter(e=>e&&(o.ort==='alle'||e.ort===o.ort)&&(o.partner||!e.partner)&&matOk(e,fehlt)),ME.player.id+'|'+o.variante+'|'+b);});
   let left=D-warm-cool,more=true;const blocks=[];
   while(more){more=false;
     for(const b of pat){const l=q[b],m=exMin(b);if(l&&l.length&&m<=left){blocks.push({b,e:l.shift(),min:m});left-=m;more=true;}}}
@@ -746,7 +746,7 @@ function mePlan(){
     <div class="field">Dauer<div class="toggle" role="group" aria-label="Dauer">${DAUERN.map(d=>`<button data-act="meDauer" data-v="${d}" aria-pressed="${o.dauer===d}">${d} min</button>`).join('')}</div></div>
     <label class="field">Schwerpunkt<select data-chg="meFokus">${opt('auto','meine Förderschwerpunkte'+((ME.fokus||[]).length?' ('+ME.fokus.join(', ')+')':''),o.fokus)}${Object.keys(ME.pools||{}).filter(b=>ME.pools[b].length).map(b=>opt(b,b,o.fokus)).join('')}</select></label>
     <label class="field">Ort<select data-chg="meOrt">${opt('alle','alle',o.ort)}${ORTE.map(n=>opt(n,'nur '+n,o.ort)).join('')}</select></label>
-    ${meMatField()}
+    ${meMatField()}${partnerChk('mePartner',o.partner)}
     <div class="field">Übungen<button class="btn" data-act="meReroll">Andere Übungen</button></div>
   </div>
   ${r.blocks.length?`
@@ -963,6 +963,7 @@ function renderTraining(){
 function pickEx(bereich,o){
   let pool=libActive().filter(e=>e.bereich===bereich&&akIdx(e.ak)<=o.akMax);
   if(o.kraft)pool=pool.filter(e=>e.kraft);
+  if(o.partner===false)pool=pool.filter(e=>!e.partner);
   if(o.niveau&&o.niveau!=='alle')pool=pool.filter(e=>e.niveau===o.niveau);
   if(o.orte)pool=pool.filter(e=>o.orte.includes(e.ort));
   if(o.fehlt&&o.fehlt.size)pool=pool.filter(e=>matOk(e,o.fehlt));
@@ -985,13 +986,14 @@ function exCard(e,extra){
   return `<article class="ex">
     ${cover(e)}
     <h3><span>${esc(e.name)}</span><small>Nr. ${e.nr}</small></h3>
-    <div class="tagsrow"><span class="chip plain">${esc(e.ort)}</span><span class="chip plain">${esc(e.niveau)}</span>${e.faehigkeit?`<span class="chip plain">${esc(e.faehigkeit)}</span>`:''}</div>
+    <div class="tagsrow"><span class="chip plain">${esc(e.ort)}</span><span class="chip plain">${esc(e.niveau)}</span>${e.faehigkeit?`<span class="chip plain">${esc(e.faehigkeit)}</span>`:''}${e.partner?'<span class="chip plain">Partnerübung</span>':''}</div>
     <p>${esc(e.text)}</p>
     <div class="facts"><span>Umfang <b>${esc(e.umfang||'–')}</b></span>${extra||''}<span>Material <b>${esc(e.material||'–')}</b></span></div>
     ${e.tipp?`<div class="tipp">${esc(e.tipp)}</div>`:''}
     ${mediaHtml(e)}
   </article>`;
 }
+function partnerChk(chg,on){return `<label class="field">Partnerübungen<span class="chk"><input type="checkbox" data-chg="${chg}" data-k="partner"${on!==false?' checked':''}>einbeziehen</span></label>`;}
 function halleSelect(scope,val){
   const hs=DB.settings.hallen||[];
   return `<label class="field" style="grid-column:span 2">Halle / Material<span class="row" style="gap:6px;flex-wrap:nowrap"><select data-chg="${scope}" data-k="halle" style="flex:1;min-width:0">${opt('','Alles vorhanden',val)}${hs.map(h=>opt(h.id,h.name,val)).join('')}<option value="__neu">Neues Materialprofil …</option></select>
@@ -1036,7 +1038,7 @@ function renderPlan(){
     <label class="field">Zusatzbereich<select data-chg="tr" data-k="extra">${opt('','keiner',o.extra)}${allBereiche().filter(b=>b!==RUMPF).map(b=>opt(b,b,o.extra)).join('')}</select></label>
     <label class="field">Niveau<select data-chg="tr" data-k="niveau">${opt('alle','alle',o.niveau)}${NIVEAUS.map(n=>opt(n,n,o.niveau)).join('')}</select></label>
     <label class="field">Ort<select data-chg="tr" data-k="ort">${opt('alle','alle passenden',o.ort)}${ORTE.map(n=>opt(n,'nur '+n,o.ort)).join('')}</select></label>
-    ${halleSelect('tr',o.halle)}
+    ${halleSelect('tr',o.halle)}${partnerChk('tr',o.partner)}
     <label class="field">Altersklasse<select data-chg="tr" data-k="ak">${opt('auto','automatisch ('+autoAk+')',o.ak)}${AKS.map(n=>opt(n,n,o.ak)).join('')}</select></label>
   </div>
   ${matEditor()}
@@ -1054,7 +1056,7 @@ function planSections(p,o){
   let s2=o.s2==='auto'?(withVal.find(x=>x.t.name!==s1)||{}).t:null;s2=o.s2==='auto'?(s2&&s2.name):o.s2;
   const young=akMax<=2;
   const ortMap={'alle':null,'Zuhause':['Zuhause'],'Halle/Platz':['Halle/Platz'],'Fitnessstudio':['Fitnessstudio']};
-  const base={akMax,niveau:o.niveau,orte:ortMap[o.ort],ortPrio:young?['Zuhause','Halle/Platz','Fitnessstudio']:['Fitnessstudio','Zuhause','Halle/Platz'],seed:p.id+'|'+o.variante,fehlt:fehltSet(o.halle)};
+  const base={akMax,niveau:o.niveau,orte:ortMap[o.ort],ortPrio:young?['Zuhause','Halle/Platz','Fitnessstudio']:['Fitnessstudio','Zuhause','Halle/Platz'],seed:p.id+'|'+o.variante,fehlt:fehltSet(o.halle),partner:o.partner!==false};
   const secs=[];
   if(s1)secs.push({title:'Schwerpunkt 1: '+s1,b:s1,n:6});
   if(s2&&s2!==s1)secs.push({title:'Schwerpunkt 2: '+s2,b:s2,n:4});
@@ -1092,7 +1094,7 @@ function renderTeamProg(){
   const ort=o.ort==='auto'?ortAuto:o.ort;
   const orte=ort==='Fitnessstudio'?ORTE:['Zuhause','Halle/Platz'];
   const ortPrio=ort==='Fitnessstudio'?['Fitnessstudio','Halle/Platz','Zuhause']:['Halle/Platz','Zuhause'];
-  const base={akMax,kraft:true,orte,ortPrio,seed:'team|'+[...o.jg].sort().join(',')+'|'+o.variante+'|'+o.format,fehlt:fehltSet(o.halle)};
+  const base={akMax,kraft:true,orte,ortPrio,seed:'team|'+[...o.jg].sort().join(',')+'|'+o.variante+'|'+o.format,fehlt:fehltSet(o.halle),partner:o.partner};
   const P=i=>ranked[i]?ranked[i].t.name:null;
   const plan=integ?[[P(0),2,'Station'],[P(1),1,'Station'],[P(2),1,'Station'],[RUMPF,1,'Station']]
                   :[[P(0),3,'A'],[P(1),2,'B'],[P(2),2,'C'],[RUMPF,3,'D']];
@@ -1113,7 +1115,7 @@ function renderTeamProg(){
   <div class="opts no-print">
     <label class="field">Format<select data-chg="tp" data-k="format">${opt('integriert','Integriert (max. 15 min)',o.format)}${opt('kraft','Krafttraining (45–60 min)',o.format)}</select></label>
     <label class="field">Ort<select data-chg="tp" data-k="ort">${opt('auto','automatisch ('+ortAuto+')',o.ort)}${opt('Halle/Platz','Halle/Platz',o.ort)}${opt('Fitnessstudio','Fitnessstudio',o.ort)}</select></label>
-    ${halleSelect('tp',o.halle)}
+    ${halleSelect('tp',o.halle)}${partnerChk('tp',o.partner)}
     <div class="field">Übungen<button class="btn" data-act="tpReroll">Andere Übungen</button></div>
   </div>
   ${matEditor()}
@@ -1150,7 +1152,7 @@ function renderTeamProg(){
 function renderLib(){
   const f=ui.lib,q=f.q.trim().toLowerCase(),extra=DB.settings.bereicheExtra,lm=libMode(),all=libAll();
   const src=e=>!isStd(e)?'team':isOff(e)?'off':'std';
-  const list=all.filter(e=>(!f.bereich||e.bereich===f.bereich)&&(!f.niveau||e.niveau===f.niveau)&&(!f.ort||e.ort===f.ort)&&(!f.ak||e.ak===f.ak)&&(!f.src||src(e)===f.src)
+  const list=all.filter(e=>(!f.bereich||e.bereich===f.bereich)&&(!f.niveau||e.niveau===f.niveau)&&(!f.ort||e.ort===f.ort)&&(!f.ak||e.ak===f.ak)&&(!f.src||src(e)===f.src)&&(!f.partner||!!e.partner===(f.partner==='ja'))
     &&(!q||(e.name+' '+e.faehigkeit+' '+e.text+' '+e.material).toLowerCase().includes(q))).sort((a,b)=>a.nr-b.nr);
   const sel=(k,label,vals)=>`<label class="field">${label}<select data-chg="lib" data-k="${k}">${opt('','alle',f[k])}${vals.map(v=>Array.isArray(v)?opt(v[0],v[1],f[k]):opt(v,v,f[k])).join('')}</select></label>`;
   const withMedia=e=>((e.bilder||[]).length?', '+e.bilder.length+' Bild'+(e.bilder.length>1?'er':''):'')+((e.videos||[]).length?', '+e.videos.length+' Video'+(e.videos.length>1?'s':''):'');
@@ -1178,15 +1180,15 @@ function renderLib(){
   <div class="opts no-print">
     <label class="field">Suche<input type="search" value="${esc(f.q)}" data-chg="lib" data-k="q" placeholder="Name, Fähigkeit, Material"></label>
     ${lm?sel('src','Herkunft',[['std','Standard (aktiv)'],['off','Standard (deaktiviert)'],['team','eigene der Mannschaft']]):''}
-    ${sel('bereich','Bereich',allBereiche())}${sel('niveau','Niveau',NIVEAUS)}${sel('ort','Ort',ORTE)}${sel('ak','ab Altersklasse',AKS)}
+    ${sel('bereich','Bereich',allBereiche())}${sel('niveau','Niveau',NIVEAUS)}${sel('ort','Ort',ORTE)}${sel('ak','ab Altersklasse',AKS)}${sel('partner','Partnerübung',['ja','nein'])}
   </div>
   <div class="section-h"><h2>${list.length} von ${all.length} Übungen</h2>${nOff?`<span class="hint">${nOff} Standardübung${nOff>1?'en':''} für diese Mannschaft deaktiviert</span>`:''}</div>
   <div class="panel" style="padding:4px 12px">${list.map(e=>`<div class="libitem${isOff(e)?' off':''}">
     <button data-act="libOpen" data-v="${e.nr}" aria-expanded="${f.open===e.nr}"><span class="nr">${e.nr}</span>
       <span class="nm"><b>${esc(e.name)}</b><small>${esc(e.bereich)}, ${esc(e.faehigkeit||'–')}, ${esc(e.niveau)}, ab ${esc(e.ak)}${withMedia(e)}</small></span>
-      ${tag(e)}<span class="chip plain">${esc(e.ort)}${e.kraft?', Kräftigung':''}</span></button>
+      ${tag(e)}<span class="chip plain">${esc(e.ort)}${e.kraft?', Kräftigung':''}${e.partner?', Partner':''}</span></button>
     ${f.open===e.nr?libEdit(e):''}</div>`).join('')||'<div class="empty">Keine Übung passt zu diesen Filtern.</div>'}</div>
-  <p class="hint">„Kräftigung“ = für das Teamprogramm geeignet. Eigene Bereiche (z. B. Koordination) erscheinen im Trainingsplan als „Zusatzbereich“.</p>`;
+  <p class="hint">„Kräftigung“ = für das Teamprogramm geeignet. „Partnerübung“ = wird zu zweit ausgeführt. Eigene Bereiche (z. B. Koordination) erscheinen im Trainingsplan als „Zusatzbereich“.</p>`;
 }
 function libEdit(e){
   const ro=!canEdit(e),dis=ro?' disabled':'',std=isStd(e),lm=libMode();
@@ -1200,6 +1202,7 @@ function libEdit(e){
     ${inp('name','Übung','wide')}
     ${sel('bereich','Bereich',allBereiche(),'<option value="__neu">Neuer Bereich …</option>')}${inp('faehigkeit','Fähigkeit')}${sel('niveau','Niveau',NIVEAUS)}${sel('ak','ab Altersklasse',AKS)}${sel('ort','Ort',ORTE)}
     <label class="field">Kräftigung<select data-chg="exF" data-nr="${e.nr}" data-k="kraft"${dis}>${opt('1','ja',e.kraft?'1':'0')}${opt('0','nein',e.kraft?'1':'0')}</select></label>
+    <label class="field">Partnerübung<select data-chg="exF" data-nr="${e.nr}" data-k="partner"${dis}>${opt('1','ja',e.partner?'1':'0')}${opt('0','nein',e.partner?'1':'0')}</select></label>
     <label class="field wide">Beschreibung<textarea data-chg="exF" data-nr="${e.nr}" data-k="text" rows="4"${dis}>${esc(e.text)}</textarea></label>
     ${inp('umfang','Umfang')}${inp('material','Material')}${inp('tipp','Coaching-Tipp','wide')}
     <div class="media-edit">
@@ -1287,17 +1290,17 @@ async function exportXlsx(){
   X.writeFile(wb,'Leistungsdiagnostik_Export.xlsx');
 }
 
-const EX_HEAD=['Nr.','Übung','Bereich','Fähigkeit','Niveau','ab Altersklasse','Ort','Beschreibung','Umfang','Material','Coaching-Tipp','Kräftigung','Video-Links'];
-function exRows(){return libAll().slice().sort((a,b)=>a.nr-b.nr).map(e=>{const r={};const v=[e.nr,e.name,e.bereich,e.faehigkeit,e.niveau,e.ak,e.ort,e.text,e.umfang,e.material,e.tipp,e.kraft?'ja':'nein',
+const EX_HEAD=['Nr.','Übung','Bereich','Fähigkeit','Niveau','ab Altersklasse','Ort','Beschreibung','Umfang','Material','Coaching-Tipp','Kräftigung','Partnerübung','Video-Links'];
+function exRows(){return libAll().slice().sort((a,b)=>a.nr-b.nr).map(e=>{const r={};const v=[e.nr,e.name,e.bereich,e.faehigkeit,e.niveau,e.ak,e.ort,e.text,e.umfang,e.material,e.tipp,e.kraft?'ja':'nein',e.partner?'ja':'nein',
   (e.videos||[]).filter(x=>x.typ==='link').map(x=>x.url).join(' ')];EX_HEAD.forEach((h,i)=>r[h]=v[i]);return r;});}
 async function exTemplate(){
   let X;try{X=await loadXLSX();}catch(e){toast('Für die Vorlage wird einmalig eine Internetverbindung gebraucht.');return;}
   const ws=X.utils.aoa_to_sheet([EX_HEAD.slice(1),
-    ['Beispiel: Sternlauf mit Ball',TESTS[4].name,'Richtungswechsel','Einsteiger','D-Jugend','Halle/Platz','1) Vier Hütchen im Quadrat. 2) Von der Mitte aus jedes Hütchen antippen und zurück. 3) Ball dabei prellen.','4 × 30 s','Hütchen, Ball','Tiefer Körperschwerpunkt beim Wenden.','nein','https://www.youtube.com/watch?v=…']]);
-  ws['!cols']=[{wch:30},{wch:18},{wch:18},{wch:14},{wch:14},{wch:14},{wch:60},{wch:12},{wch:16},{wch:40},{wch:10},{wch:40}];
+    ['Beispiel: Sternlauf mit Ball',TESTS[4].name,'Richtungswechsel','Einsteiger','D-Jugend','Halle/Platz','1) Vier Hütchen im Quadrat. 2) Von der Mitte aus jedes Hütchen antippen und zurück. 3) Ball dabei prellen.','4 × 30 s','Hütchen, Ball','Tiefer Körperschwerpunkt beim Wenden.','nein','nein','https://www.youtube.com/watch?v=…']]);
+  ws['!cols']=[{wch:30},{wch:18},{wch:18},{wch:14},{wch:14},{wch:14},{wch:60},{wch:12},{wch:16},{wch:40},{wch:10},{wch:12},{wch:40}];
   const n=Math.max(allBereiche().length,AKS.length,ORTE.length);
-  const ref=[['Bereich','Niveau','ab Altersklasse','Ort','Kräftigung']];
-  for(let i=0;i<n;i++)ref.push([allBereiche()[i]||'',NIVEAUS[i]||'',AKS[i]||'',ORTE[i]||'',['ja','nein'][i]||'']);
+  const ref=[['Bereich','Niveau','ab Altersklasse','Ort','Kräftigung','Partnerübung']];
+  for(let i=0;i<n;i++)ref.push([allBereiche()[i]||'',NIVEAUS[i]||'',AKS[i]||'',ORTE[i]||'',['ja','nein'][i]||'',['ja','nein'][i]||'']);
   ref.push([],['Neue Bereiche sind erlaubt und werden beim Hinzufügen angelegt.'],['Zeilen, die mit „Beispiel:“ beginnen, werden ignoriert.'],['Mehrere Video-Links durch Leerzeichen trennen.']);
   const wb=X.utils.book_new();X.utils.book_append_sheet(wb,ws,'Übungen');X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(ref),'Auswahlwerte');
   X.writeFile(wb,'Uebungen_Vorlage.xlsx');
@@ -1317,7 +1320,7 @@ async function importEx(){
   if(hi<0){toast('Keine Spalte „Übung“ gefunden. Am besten die Vorlage verwenden.');return;}
   const H=rows[hi].map(norm),col=(...n)=>H.findIndex(h=>n.some(x=>h.startsWith(x)));
   const C={name:col('übung','uebung'),bereich:col('bereich'),faehigkeit:col('fähigkeit','faehigkeit'),niveau:col('niveau'),ak:col('ab altersklasse','altersklasse'),ort:col('ort'),
-    text:col('beschreibung'),umfang:col('umfang'),material:col('material'),tipp:col('coaching','tipp'),kraft:col('kräftigung','kraeftigung'),vid:col('video')};
+    text:col('beschreibung'),umfang:col('umfang'),material:col('material'),tipp:col('coaching','tipp'),kraft:col('kräftigung','kraeftigung'),partner:col('partner'),vid:col('video')};
   const get=(r,k)=>C[k]<0?'':String(r[C[k]]==null?'':r[C[k]]).trim();
   const known=new Set(libAll().map(e=>norm(e.name))),neuB=new Set(),add=[];let dup=0;
   rows.slice(hi+1).forEach(r=>{
@@ -1329,7 +1332,7 @@ async function importEx(){
     const o=get(r,'ort');const ort=/studio|fitness/i.test(o)?'Fitnessstudio':/halle|platz/i.test(o)?'Halle/Platz':'Zuhause';
     const vids=get(r,'vid').split(/\s+/).filter(isHttp).map(u=>({typ:'link',url:u,titel:'Video'}));
     add.push({name,bereich:b,faehigkeit:get(r,'faehigkeit'),niveau:nv,ak,ort,text:get(r,'text'),umfang:get(r,'umfang'),material:get(r,'material'),tipp:get(r,'tipp'),
-      kraft:/^(ja|x|1|true|yes)$/i.test(get(r,'kraft')),bilder:[],videos:vids});
+      kraft:/^(ja|x|1|true|yes)$/i.test(get(r,'kraft')),partner:/^(ja|x|1|true|yes)$/i.test(get(r,'partner')),bilder:[],videos:vids});
   });
   if(!add.length){toast(dup?'Alle '+dup+' Übungen gibt es schon.':'Keine Übungen in der Datei gefunden.');return;}
   if(!confirm(`${add.length} neue Übungen hinzufügen?${dup?' '+dup+' mit gleichem Namen werden übersprungen.':''}${neuB.size?' Neue Bereiche: '+[...neuB].join(', ')+'.':''}`))return;
@@ -1361,7 +1364,7 @@ const canEdit=e=>!isStd(e)||(!!master&&!STD.fallback);
 function exSaved(e){if(isStd(e))stdChanged();else changed();}
 const EXF=['name','bereich','faehigkeit','niveau','ak','ort','text','umfang','material','tipp'];
 function sameEx(a,b){
-  return EXF.every(k=>String(a[k]==null?'':a[k])===String(b[k]==null?'':b[k]))&&!!a.kraft===!!b.kraft
+  return EXF.every(k=>String(a[k]==null?'':a[k])===String(b[k]==null?'':b[k]))&&!!a.kraft===!!b.kraft&&!!a.partner===!!b.partner
     &&JSON.stringify(a.bilder||[])===JSON.stringify(b.bilder||[])&&JSON.stringify(a.videos||[])===JSON.stringify(b.videos||[]);
 }
 /* Einmalige Umstellung einer Mannschaft mit voller Kopie: Übungen wie im Standard (oder unverändert aus der
@@ -1431,7 +1434,7 @@ const ACT={
   tpReroll:()=>{ui.tp.variante=ui.tp.variante%9+1;render();},
   libOpen:a=>{const n=+a.dataset.v;ui.lib.open=ui.lib.open===n?null:n;render();},
   addEx:a=>{const toStd=a&&a.dataset.v==='std'&&libMode()&&master&&!STD.fallback;
-    const e={nr:0,name:'Neue Übung',bereich:ui.lib.bereich||TESTS[0].name,faehigkeit:'',niveau:'Einsteiger',ak:'E-Jugend',ort:'Zuhause',text:'',umfang:'',material:'',tipp:'',kraft:true,bilder:[],videos:[]};
+    const e={nr:0,name:'Neue Übung',bereich:ui.lib.bereich||TESTS[0].name,faehigkeit:'',niveau:'Einsteiger',ak:'E-Jugend',ort:'Zuhause',text:'',umfang:'',material:'',tipp:'',kraft:true,partner:false,bilder:[],videos:[]};
     if(toStd){e.nr=STD.list.reduce((m,x)=>Math.max(m,x.nr),0)+1;STD.list.push(e);STDSET.add(e);stdChanged();}
     else{e.nr=newExNr();DB.uebungen.push(e);changed();}
     Object.assign(ui.lib,{q:'',niveau:'',ort:'',ak:'',src:'',open:e.nr});render();
@@ -1635,16 +1638,17 @@ const CHG={
     try{const data=await readDataURL(f);e.videos.push({typ:'datei',data,size:f.size,titel:f.name.replace(/\.[^.]+$/,'')});exSaved(e);render();toast('Video eingebettet.');}
     catch(x){toast('Das Video konnte nicht gelesen werden.');}},
   exF:el=>{const e=exByNr(el.dataset.nr);if(!e||!canEdit(e))return;const k=el.dataset.k;let v=el.value;
-    if(k==='kraft')v=v==='1';else if(k==='name'&&!v.trim()){el.value=e.name;return;}
+    if(k==='kraft'||k==='partner')v=v==='1';else if(k==='name'&&!v.trim()){el.value=e.name;return;}
     if(k==='bereich'&&v==='__neu'){const n=prompt('Name des neuen Bereichs:');if(!n||!n.trim()){el.value=e.bereich;return;}v=addBereich(n);}
-    e[k]=v;exSaved(e);if(['name','bereich','niveau','ak','ort','kraft','faehigkeit'].includes(k))render();},
+    e[k]=v;exSaved(e);if(['name','bereich','niveau','ak','ort','kraft','partner','faehigkeit'].includes(k))render();},
   lib:el=>{ui.lib[el.dataset.k]=el.value;ui.lib.open=null;render();},
-  tr:el=>{if(el.dataset.k==='halle'&&el.value==='__neu'){newHalle('tr');return;}ui.tr[el.dataset.k]=el.value;if(el.dataset.k==='halle')ui.matEdit=null;render();},
-  tp:el=>{if(el.dataset.k==='halle'&&el.value==='__neu'){newHalle('tp');return;}ui.tp[el.dataset.k]=el.value;if(el.dataset.k==='halle')ui.matEdit=null;render();},
+  tr:el=>{if(el.dataset.k==='halle'&&el.value==='__neu'){newHalle('tr');return;}ui.tr[el.dataset.k]=el.type==='checkbox'?el.checked:el.value;if(el.dataset.k==='halle')ui.matEdit=null;render();},
+  tp:el=>{if(el.dataset.k==='halle'&&el.value==='__neu'){newHalle('tp');return;}ui.tp[el.dataset.k]=el.type==='checkbox'?el.checked:el.value;if(el.dataset.k==='halle')ui.matEdit=null;render();},
   cmp:el=>{ui.cmp=el.value;render();},
   meOrt:el=>{ui.me.ort=el.value;render();},
   meMat:el=>{const f=meFehlt();if(el.checked)f.delete(el.value);else f.add(el.value);meSaveFehlt();render();},
   meFokus:el=>{ui.me.fokus=el.value;render();},
+  mePartner:el=>{ui.me.partner=el.checked;render();},
   meGeb:el=>{if(!ME)return;const g=el.value;if(!validGeb(g)){toast('Bitte ein gültiges Datum eingeben.');el.value=DB.players[0].geb||'';return;}
     DB.players[0].geb=g;meSubmit();},
   mePhoto:async el=>{if(!ME)return;const f=el.files[0];if(!f)return;
